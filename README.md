@@ -1,2 +1,2 @@
-# ehssim
-Entanglement Hypergraph States Simulator
+# ehsim
+Entanglement Hypergraph Simulator
