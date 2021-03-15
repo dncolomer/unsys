@@ -25,7 +25,7 @@ setup(
     description=("Entanglement Hypergraph Simulator"),
     long_description=long_description,
     long_description_content_type="text/markdown",
-    license="Apache 2.0",
+    license="MIT",
     keywords=["graph", "quantum"],
     url="https://github.com/dncolomer/ehsim_prototype/tarball/" + VERSION,
     packages=find_packages(exclude=["tests", "*.tests", "*.tests.*", "tests.*"]),
