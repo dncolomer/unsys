@@ -34,6 +34,7 @@ setup(
         "numpy==1.20.1",
         "networkx==2.5",
         "hypernetx==0.3.7",
+        "pandas==1.2.3",
     ],
     include_package_data=True,
 )
