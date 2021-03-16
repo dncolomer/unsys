@@ -1,5 +1,4 @@
 from itertools import combinations
-import json
 
 import numpy as np
 from networkx import fruchterman_reingold_layout as layout
@@ -9,7 +8,6 @@ from .gates import *
 
 # global variables
 node_nb = 0
-
 
 initial_state = np.array([1, 0], dtype=np.complex_)
 excited_state = np.array([0, 1], dtype=np.complex_)
@@ -76,9 +74,26 @@ class Hyperedge:
 class Hypergraph:
 
     # TODO add support for register level operation in a later version
-    def __init__(self, nb_qubits, sv=[]):
+    def __init__(self, nb_qubits: int, sv: list = None, record_gates: bool = True):
+        """
+        Create a new Hypergraph simulator.
+
+        Arguments:
+            nb_qubits (int): The number of qubits to simulate
+            sv (list): A list of state vectors to initialize with
+            record_gates (bool: True): Whether to keep a log of gates as they
+                are applied. This incurs a slight performance penalty but
+                enables some useful tools like visualization.
+
+        """
         self.nodes = {}
         self.edges = {}
+
+        sv = sv or []
+
+        self._record_gates = record_gates
+        self._gate_log = []
+        self._num_qubits = nb_qubits
 
         if len(sv) > 0:
             for i in range(0, len(sv)):
@@ -104,6 +119,9 @@ class Hypergraph:
             for i in range(0, nb_qubits):
                 node = Node("q" + str(i), np.array([1, 0], dtype=np.complex_))
                 self.nodes[node.uid] = node
+
+    def __len__(self):
+        return self._num_qubits
 
     def copyNode(self, node_uid):
         pass
@@ -171,8 +189,32 @@ class Hypergraph:
 
         self.edges.pop(edge_uid)
 
+    def _record(self, qubits, gate: np.ndarray, controls: list = None):
+        """
+        Make a note of which gates have been applied to which qubits.
+
+        Arguments:
+            qubits (str | list[str]): A list of qubits or a single qubit name
+            gate: The gate that was applied
+            controls (optional): A list of control qubits
+
+        Returns:
+            None
+
+        """
+        if not self._record_gates:
+            return
+        # If this gate acts on a single qubit, save it as an array of length=1.
+        # This will make the gate log types consistent.
+        if isinstance(qubits, str):
+            qubits = [qubits]
+        self._gate_log.append(
+            {"gate": gate, "qubits": qubits, "controls": controls or []}
+        )
+
     # TODO check if measured
     def applyGate(self, qubit, gate):
+        self._record(qubit, gate)
         for n in self.nodes:
             if self.nodes[n].qubit == qubit:
                 # we apply the gate
@@ -219,6 +261,7 @@ class Hypergraph:
 
     # controls = array of qubit labels
     def applyControlledOp(self, controls, target, gate):
+        self._record(target, gate, controls=controls)
         fq = controls[0]
         for index, qubit in enumerate(controls):
             if index > 0:
@@ -246,6 +289,7 @@ class Hypergraph:
     # TODO check if measured
     # TODO bug: for a circuit like X and CX seems like a node is not added tot he edge properly
     def apply2QubitGate(self, a, b, gate):
+        self._record([a, b], gate)
         # if one of the qubits is not entangled but the other is we need to add the qubit to all corresponding edges before we start with the operation (sort of decompress)
         # preprocessing NOT tested
         a_edge_ids = self.getQubitEdgeIds(a)
@@ -793,94 +837,3 @@ class Hypergraph:
         print("edges:")
         for e in self.edges:
             print(self.edges[e].amplitude)
-
-    def cytoscapeExport(self):
-        elements = {}
-        elements["nodes"] = []
-        elements["edges"] = []
-        for i in self.nodes:
-            # set precision to avoid awkward -zeros
-            s = []
-            for state in self.nodes[i].state:
-                s.append(np.around(state, decimals=3))
-
-            measured = ""
-            if self.nodes[i].measured:
-                measured = "[M]"
-
-            lbl = (
-                str(self.nodes[i].uid)
-                + "  ["
-                + str(self.nodes[i].qubit)
-                + "]  "
-                + str(np.around(s, 3))
-                + " "
-                + measured
-            )
-            nn = {}
-            nn["data"] = {}
-            nn["data"]["id"] = lbl
-
-            if self.nodes[i].edge_uid is not None:
-                euid = self.nodes[i].edge_uid
-                l_euid = euid + "  " + str(np.around(self.edges[euid].amplitude, 3))
-                nn["data"]["parent"] = l_euid
-
-            elements["nodes"].append(nn)
-
-        print(json.dumps(elements))
-
-    def draw(self):
-        s = hnx.Entity("system", elements=[], amplitude=1)
-        hg = hnx.Hypergraph()
-        hg.add_edge(s)
-
-        empty_system = True
-
-        if len(self.nodes) == 0:
-            print("Empty Hypergraph")
-
-        for i in self.edges:
-            edge = hnx.Entity(i + "  " + str(np.around(self.edges[i].amplitude, 3)))
-
-            hg.add_edge(edge)
-
-        for i in self.nodes:
-            # set precision to avoid awkward -zeros
-            s = []
-            for state in self.nodes[i].state:
-                s.append(np.around(state, decimals=3))
-
-            measured = ""
-            if self.nodes[i].measured:
-                measured = "[M]"
-
-            node = hnx.Entity(
-                str(self.nodes[i].uid)
-                + "  ["
-                + str(self.nodes[i].qubit)
-                + "]  "
-                + str(np.around(s, 3))
-                + " "
-                + measured
-            )
-
-            if self.nodes[i].edge_uid is None:
-                hg.add_node_to_edge(node, "system")
-                empty_system = False
-            else:
-                euid = self.nodes[i].edge_uid
-                l_euid = euid + "  " + str(np.around(self.edges[euid].amplitude, 3))
-                hg.add_node_to_edge(node, l_euid)
-
-        if empty_system:
-            hg.remove_edge("system")
-
-        """hnx.drawing.rubber_band.draw(hg,
-             node_labels=getNodeLabels(hg),
-             edge_labels=getEdgeLabels(hg),
-             node_radius=2.0,
-             label_alpha=1.0
-        )"""
-
-        hnx.drawing.two_column.draw(hg)
