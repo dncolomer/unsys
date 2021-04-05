@@ -6,6 +6,8 @@
 # gitignore template for Jupyter Notebooks
 # website: http://jupyter.org/
 
+.ehsim/
+
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
 
@@ -38,7 +40,8 @@ ipython_config.py
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*

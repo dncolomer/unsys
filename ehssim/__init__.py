@@ -10,12 +10,10 @@ from .gates import *
 # global variables
 node_nb = 0
 
-
 initial_state = np.array([1, 0], dtype=np.complex_)
 excited_state = np.array([0, 1], dtype=np.complex_)
 plus_state = np.array([1 / np.sqrt(2), 1 / np.sqrt(2)], dtype=np.complex_)
 minus_state = np.array([1 / np.sqrt(2), -1 / np.sqrt(2)], dtype=np.complex_)
-
 
 def getUID(prefix="id"):
     global node_nb
@@ -61,6 +59,7 @@ class Node:
         self.state = state
         self.measured = False
         self.edge_uid = None
+        self.replaced = False
 
 
 class Hyperedge:
@@ -718,7 +717,6 @@ class Hypergraph:
 
     def expandQubits(self, a, b):
         self.apply2QubitGate(a, b, II)
-        pass
 
     # Factor a specific set of entangled qubits
     # TODO add a verbose mode that explains a bit more what's going on (what's being merged)
@@ -829,6 +827,63 @@ class Hypergraph:
             elements["nodes"].append(nn)
 
         print(json.dumps(elements))
+    
+    #
+    # match [1,1,0]
+    # edge {uid = ...}
+    # map ["q0","q1","q2"]
+    def isMatch(self,match,edge,qubit_map):
+        euid = None
+        if (edge is not None):
+            euid = self.edges[edge].uid
+
+        for i,m in enumerate(match):
+            q = qubit_map[i] #TODO check for error
+
+            if (self.getQubitNodeIdInEdge(q,euid) is None):
+                return False
+            else:
+                node = self.nodes[self.getQubitNodeIdInEdge(q,euid)]
+                if (not self.stateEq(node.state,m)):
+                    return False
+
+        return True
+    
+    def replaceMatch(self,edge,replace,qubit_map):
+        euid = None
+        if (edge is not None):
+            euid = self.edges[edge].uid
+
+        for i,m in enumerate(replace):
+            q = qubit_map[i] #TODO check for error
+
+            if (not self.nodes[self.getQubitNodeIdInEdge(q,euid)].replaced):
+                self.nodes[self.getQubitNodeIdInEdge(q,euid)].state = m
+                self.nodes[self.getQubitNodeIdInEdge(q,euid)].replaced = True
+
+    #input_map=["q0","q1","q2"]
+    def rewrite(self,rules,input_map):
+        #set all replacement tracking t False
+        for n in self.nodes:
+            self.nodes[n].replaced = False
+
+        #Expand mapped qubits
+        fq = input_map[0]
+        for index, qubit in enumerate(input_map):
+            if index > 0:
+                self.expandQubits(input_map[index - 1], input_map[index])
+
+        for rule in rules:
+            #find matches in edges
+            # TODO if th edge has been touched previously shouldnt match anymore
+            for e in self.edges:
+                if (self.isMatch(rule['match'],e,input_map)):
+                    self.replaceMatch(e,rule['replace'],input_map)
+            
+            #find matches in system
+            if (self.isMatch(rule['match'],None,input_map)):
+                    self.replaceMatch(None,rule['replace'],input_map)
+
 
     def draw(self):
         s = hnx.Entity("system", elements=[], amplitude=1)
