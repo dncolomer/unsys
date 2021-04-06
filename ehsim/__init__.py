@@ -2,18 +2,14 @@ from itertools import combinations
 import json
 
 import numpy as np
-from networkx import fruchterman_reingold_layout as layout
-import hypernetx as hnx
-
-from .gates import *
 
 # global variables
 node_nb = 0
 
-initial_state = np.array([1, 0], dtype=np.complex_)
-excited_state = np.array([0, 1], dtype=np.complex_)
-plus_state = np.array([1 / np.sqrt(2), 1 / np.sqrt(2)], dtype=np.complex_)
-minus_state = np.array([1 / np.sqrt(2), -1 / np.sqrt(2)], dtype=np.complex_)
+zero_ket = np.array([1, 0], dtype=np.complex_)
+one_ket = np.array([0, 1], dtype=np.complex_)
+plus_ket = np.array([1 / np.sqrt(2), 1 / np.sqrt(2)], dtype=np.complex_)
+minus_ket = np.array([1 / np.sqrt(2), -1 / np.sqrt(2)], dtype=np.complex_)
 
 def getUID(prefix="id"):
     global node_nb
@@ -21,36 +17,12 @@ def getUID(prefix="id"):
     node_nb = node_nb + 1
     return prefix + "_" + str(node_nb - 1)
 
-
-def getNodeLabels(system):
-    labels = {}
-    for n in system.nodes:
-        labels[n] = (
-            system.nodes[n].uid
-            + "  ["
-            + system.nodes[n].qubit
-            + "]  "
-            + str(np.around(system.nodes[n].state, 3))
-        )
-
-    return labels
-
-
-def getEdgeLabels(system):
-    labels = {}
-    for n in system.edges:
-        labels[n] = n + "  " + str(np.around(system.edges[n].amplitude, 3))
-
-    return labels
-
-
 def P2R(radii, angles):
     return radii * np.exp(1j * angles)
 
 
 def R2P(x):
     return np.abs(x), np.angle(x)
-
 
 class Node:
     def __init__(self, qubit, state):
@@ -60,7 +32,6 @@ class Node:
         self.measured = False
         self.edge_uid = None
         self.replaced = False
-
 
 class Hyperedge:
     def __init__(self, amplitude, uid=None):
@@ -78,6 +49,7 @@ class Hypergraph:
     def __init__(self, nb_qubits, sv=[]):
         self.nodes = {}
         self.edges = {}
+        self.qubitLabels = []
 
         if len(sv) > 0:
             for i in range(0, len(sv)):
@@ -91,8 +63,10 @@ class Hypergraph:
                     bits = [(i >> bit) & 1 for bit in range(nb_qubits - 1, -1, -1)]
                     j = 0
                     for bit in bits:
+                        self.qubitLabels.append("q" + str(j))
+
                         p = Node(
-                            "q" + str(j), (excited_state if bit == 1 else initial_state)
+                            "q" + str(j), (one_ket if bit == 1 else zero_ket)
                         )
                         # add nodes to hgraph
                         self.nodes[p.uid] = p
@@ -101,11 +75,10 @@ class Hypergraph:
                         j = j + 1
         else:
             for i in range(0, nb_qubits):
+                self.qubitLabels.append("q" + str(i))
+
                 node = Node("q" + str(i), np.array([1, 0], dtype=np.complex_))
                 self.nodes[node.uid] = node
-
-    def copyNode(self, node_uid):
-        pass
 
     def normalize_complex_arr(self, a):
         norm = np.linalg.norm(a)
@@ -170,13 +143,6 @@ class Hypergraph:
 
         self.edges.pop(edge_uid)
 
-    # TODO check if measured
-    def applyGate(self, qubit, gate):
-        for n in self.nodes:
-            if self.nodes[n].qubit == qubit:
-                # we apply the gate
-                self.nodes[n].state = np.dot(gate, self.nodes[n].state)
-
     # We must conbine them in distributabliy
     def combineEdges(self, a_edge_ids, b_edge_ids):
         for a_id in a_edge_ids:
@@ -215,147 +181,6 @@ class Hypergraph:
                 self.deleteNode(n_id)
 
             self.deleteEdge(e_id)
-
-    # controls = array of qubit labels
-    def applyControlledOp(self, controls, target, gate):
-        fq = controls[0]
-        for index, qubit in enumerate(controls):
-            if index > 0:
-                self.expandQubits(controls[index - 1], controls[index])
-
-        self.expandQubits(target, fq)
-        edge_ids = self.getQubitEdgeIds(target)
-
-        for e_id in edge_ids:
-            all_ones = True
-            for cq in controls:
-                node_id = self.getQubitNodeIdInEdge(cq, e_id)
-
-                if self.stateEq(self.nodes[node_id].state, initial_state):
-                    all_ones = False
-
-            if all_ones:
-                node_id = self.getQubitNodeIdInEdge(target, e_id)
-                self.applyGateToNode(node_id, gate)
-
-    def applyGateToNode(self, node_id, gate):
-        self.nodes[node_id].state = np.dot(gate, self.nodes[node_id].state)
-
-    # We assume a != b
-    # TODO check if measured
-    # TODO bug: for a circuit like X and CX seems like a node is not added tot he edge properly
-    def apply2QubitGate(self, a, b, gate):
-        # if one of the qubits is not entangled but the other is we need to add the qubit to all corresponding edges before we start with the operation (sort of decompress)
-        # preprocessing NOT tested
-        a_edge_ids = self.getQubitEdgeIds(a)
-        b_edge_ids = self.getQubitEdgeIds(b)
-
-        if len(a_edge_ids) == 0 and len(b_edge_ids) != 0:
-            a_node_ids = self.getQubitNodeIds(a)
-            a_node = self.nodes[a_node_ids[0]]
-            for edge_id in b_edge_ids:
-                # create node
-                p = Node(a_node.qubit, a_node.state)
-                # add nodes to hgraph
-                self.nodes[p.uid] = p
-                # add nodes to edge
-                self.addNodeToEdge(p.uid, edge_id)
-
-            # delete original node
-            # did nt belong t any edge anyway
-            self.deleteNode(a_node.uid)
-
-        elif len(b_edge_ids) == 0 and len(a_edge_ids) != 0:
-            b_node_ids = self.getQubitNodeIds(b)
-            b_node = self.nodes[b_node_ids[0]]
-            for edge_id in a_edge_ids:
-                # create node
-                p = Node(b_node.qubit, b_node.state)
-                # add nodes to hgraph
-                self.nodes[p.uid] = p
-                # add nodes to edge
-                self.addNodeToEdge(p.uid, edge_id)
-
-            # delete original node
-            # did nt belong t any edge anyway
-            self.deleteNode(b_node.uid)
-
-        # if both entangled but in different edges we need to do some preprocessing as well
-        shared_edges = list(set(a) & set(b))
-
-        # tbh, if edges are not shared they, the intersection must be empty. Any other set-up it's just not a valid state
-        if len(shared_edges) == 0:
-            self.combineEdges(a_edge_ids, b_edge_ids)
-
-        # From here on we assume both are either not entangled or share the same edges
-        a_node_ids = self.getQubitNodeIds(a)
-        b_node_ids = self.getQubitNodeIds(b)
-
-        for a_id in a_node_ids:
-            for b_id in b_node_ids:
-                if (a_id in self.nodes.keys()) and (b_id in self.nodes.keys()):
-                    if self.nodes[a_id].edge_uid == self.nodes[b_id].edge_uid:
-                        parent_amplitude = 1
-                        if self.nodes[a_id].edge_uid != None:
-                            parent_amplitude = self.edges[
-                                self.nodes[a_id].edge_uid
-                            ].amplitude
-
-                        # get local 2 qubit state vector
-                        sv = np.kron(self.nodes[a_id].state, self.nodes[b_id].state)
-                        # apply the gate
-                        new_sv = np.dot(gate, sv)
-
-                        # this is hard coded for 2 (00,01,10,11)
-
-                        # for garbage collection afterwards
-                        gc_n = [a_id, b_id]
-                        # for garbage collection afterwards
-                        gc_e = self.nodes[a_id].edge_uid
-
-                        # process result
-                        for i in range(0, 4):
-                            prob = new_sv[i].real ** 2 + new_sv[i].imag ** 2
-                            if prob:
-
-                                # TODO This is used in many places and can be abstracted
-                                e = Hyperedge(parent_amplitude * new_sv[i])
-                                self.edges[e.uid] = e
-
-                                # create nodes
-                                p = Node(a, (excited_state if i > 1 else initial_state))
-                                q = Node(b, (excited_state if i % 2 else initial_state))
-
-                                # add nodes to hgraph
-                                self.nodes[p.uid] = p
-                                self.nodes[q.uid] = q
-
-                                # add nodes to edge
-                                self.addNodeToEdge(p.uid, e.uid)
-                                self.addNodeToEdge(q.uid, e.uid)
-
-                                # If they were inside an edge, this edge can have nodes from other qubits
-                                # These nodes should also be replicated and the original ones deleted afterwards
-                                e_id = self.nodes[a_id].edge_uid
-                                if e_id is not None:
-                                    for n_id in self.edges[e_id].node_uids:
-                                        if n_id != a_id and n_id != b_id:
-                                            n = self.nodes[n_id]
-                                            # create nodes
-                                            p = Node(n.qubit, n.state)
-                                            # add nodes to hgraph
-                                            self.nodes[p.uid] = p
-                                            # add nodes to edge
-                                            self.addNodeToEdge(p.uid, e.uid)
-                                            gc_n.append(n_id)
-
-                        # Collect garbage
-                        for g_id in gc_n:
-                            self.deleteNode(g_id)
-
-                        # All belong to same edge
-                        if gc_e is not None:
-                            self.deleteEdge(gc_e)
 
     def getGlobalPhase(self, state):
         for s in state:
@@ -489,10 +314,6 @@ class Hypergraph:
                             if n in measured_qubits:
                                 diff_but_measured += 1
 
-                            print("meas details")
-                            print(n + "-" + e1 + "-" + e2)
-                            print(diff_but_measured)
-
                             # we add the collected global phases to each before addition
                             st1 = self.addGlobalPhase(m[e1][n], ph1)
                             st2 = self.addGlobalPhase(m[e2][n], ph2)
@@ -572,7 +393,6 @@ class Hypergraph:
 
             populated_qubits = []
             for e in m:
-                # print(e)
                 edge = Hyperedge(amps[e], e)
                 self.edges[edge.uid] = edge
                 for q in m[edge.uid]:
@@ -606,7 +426,7 @@ class Hypergraph:
         if edge_uid is None:
             # TODO This is a bit dirty ;)
             # create an edge for the 1 component
-            edge = Hyperedge(excited_state[1])
+            edge = Hyperedge(one_ket[1])
             self.edges[edge.uid] = edge
 
             # populate initial edge
@@ -623,7 +443,7 @@ class Hypergraph:
         for n_id in edge.node_uids:
             state = self.nodes[n_id].state
             if n_id == node.uid:
-                state = initial_state
+                state = zero_ket
 
             p = Node(self.nodes[n_id].qubit, state)
             p.measured = self.nodes[n_id].measured
@@ -634,7 +454,7 @@ class Hypergraph:
         edge.amplitude = edge.amplitude * node.state[1]
         for n_id in edge.node_uids:
             if n_id == node.uid:
-                self.nodes[n_id].state = excited_state
+                self.nodes[n_id].state = one_ket
 
     # TODO Measure a set of qubits
     # TODO Revise preconditions for the op methods
@@ -652,8 +472,8 @@ class Hypergraph:
                 # self.nodes[node.uid].state = self.correctPhase(node.state)
                 node = self.nodes[self.getQubitNodeIdInEdge(q, None)]
                 self.nodes[node.uid].measured = True
-                if not self.stateEq(node.state, excited_state) and not self.stateEq(
-                    node.state, initial_state
+                if not self.stateEq(node.state, one_ket) and not self.stateEq(
+                    node.state, zero_ket
                 ):
                     # if the qubit is not then we need to split the edge into 2.
                     # One where the node will be in the 0 state + measured = True
@@ -667,8 +487,8 @@ class Hypergraph:
                     # self.nodes[node.uid].state = self.correctPhase(node.state)
                     node = self.nodes[self.getQubitNodeIdInEdge(q, e_id)]
                     self.nodes[node.uid].measured = True
-                    if not self.stateEq(node.state, excited_state) and not self.stateEq(
-                        node.state, initial_state
+                    if not self.stateEq(node.state, one_ket) and not self.stateEq(
+                        node.state, zero_ket
                     ):
                         # if the qubit is not then we need to split the edge into 2.
                         # One where the node will be in the 0 state + measured = True
@@ -688,7 +508,7 @@ class Hypergraph:
             self.edges[euid].amplitude = ampl[index]
 
     # TODO calculate how much we are omitting (like Quirk does)
-    def postSelectZ(self, qubits, state=initial_state):
+    def postSelectZ(self, qubits, state=zero_ket):
         self.measure(qubits)
         loss = 0
         for qubit in qubits:
@@ -707,16 +527,68 @@ class Hypergraph:
         self.normalizeEdgeAmplitudes()
         return loss
 
-    # TODO Factor the entire system
-    def factor(self):
-        pass
-
-    # TODO Expand the entire system
-    def expand(self):
-        pass
-
     def expandQubits(self, a, b):
-        self.apply2QubitGate(a, b, II)
+        #if one of the qubits is not entangled but the other is we need to add the qubit to all corresponding edges before we start with the operation (sort of decompress)
+        #preprocessing NOT tested
+        a_edge_ids = self.getQubitEdgeIds(a)
+        b_edge_ids = self.getQubitEdgeIds(b)
+        
+        if (len(a_edge_ids) == 0 and len(b_edge_ids) != 0):
+            a_node_ids = self.getQubitNodeIds(a)
+            a_node = self.nodes[a_node_ids[0]]
+            for edge_id in b_edge_ids:
+                #create node
+                p = Node(a_node.qubit,a_node.state)
+                #add nodes to hgraph
+                self.nodes[p.uid] = p
+                #add nodes to edge
+                self.addNodeToEdge(p.uid,edge_id)
+            
+            #delete original node
+            #did nt belong t any edge anyway
+            self.deleteNode(a_node.uid)
+        
+        elif (len(b_edge_ids) == 0 and len(a_edge_ids) != 0):
+            b_node_ids = self.getQubitNodeIds(b)
+            b_node = self.nodes[b_node_ids[0]]
+            for edge_id in a_edge_ids:
+                #create node
+                p = Node(b_node.qubit,b_node.state)
+                #add nodes to hgraph
+                self.nodes[p.uid] = p
+                #add nodes to edge
+                self.addNodeToEdge(p.uid,edge_id)
+            
+            #delete original node
+            #did nt belong t any edge anyway
+            self.deleteNode(b_node.uid)
+        
+        #if both entangled but in different edges we need to do some preprocessing as well
+        shared_edges = list(set(a) & set(b))
+
+        #tbh, if edges are not shared they, the intersection must be empty. Any other set-up it's just not a valid state
+        if (len(shared_edges) == 0):
+            self.combineEdges(a_edge_ids,b_edge_ids)
+
+        #SPLIT a
+        print("SPLIT a")
+        a_edge_ids = self.getQubitEdgeIds(a)
+        if (len(a_edge_ids) != 0):
+            for eid in a_edge_ids:
+                self.splitEdgeZ(eid,a)
+        else:
+            self.splitEdgeZ(None,a)
+
+        #SPLIT b
+        print("SPLIT a")
+        b_edge_ids = self.getQubitEdgeIds(b)
+        if (len(b_edge_ids != 0)):
+            for eid in b_edge_ids:
+                self.splitEdgeZ(eid,b)
+        else:
+            self.splitEdgeZ(None,b)
+
+        
 
     # Factor a specific set of entangled qubits
     # TODO add a verbose mode that explains a bit more what's going on (what's being merged)
@@ -756,78 +628,39 @@ class Hypergraph:
             return
 
         # call recursive part
-        print(measured_qubits)
         (m_simp, amps_simp) = self.factorRec(m, amps, measured_qubits, steps)
 
         # process output dict
         self.deleteEdges(m)
         self.createEdges(m_simp, amps_simp, measured_qubits)
 
-    def apply(self, *args, **kwargs):
-
-        qubits = args[:-1]
-        gate = kwargs.pop("gate", args[-1])
-        controls = kwargs.pop("controls", None) or kwargs.pop("c", None) or None
-
-        # def applyControlledOp(self, controls, target, gate):
-        if controls:
-            return self.applyControlledOp(controls, qubits[0], gate)
-
-        if len(qubits) == 1:
-            self.applyGate(qubits[0], gate)
-        elif len(qubits) == 2:
-            self.apply2QubitGate(qubits[0], qubits[1], gate)
-        else:
-            raise ValueError(
-                "Invalid number of qubits applied:\n",
-                f"One and two qubit gates are supported, but you passed {len(qubits)}.",
-            )
-
     def print_raw(self):
-        print("nodes:")
-        for n in self.nodes:
-            print(self.nodes[n].state)
-
-        print("edges:")
+        print("                      ".join(str(ql) for ql in self.qubitLabels))   
+        phelper = []
+        
         for e in self.edges:
-            print(self.edges[e].amplitude)
+            phelper = []
+            for ql in self.qubitLabels:
+                nid = self.getQubitNodeIdInEdge(ql,e)
 
-    def cytoscapeExport(self):
-        elements = {}
-        elements["nodes"] = []
-        elements["edges"] = []
-        for i in self.nodes:
-            # set precision to avoid awkward -zeros
-            s = []
-            for state in self.nodes[i].state:
-                s.append(np.around(state, decimals=3))
+                if (nid is not None):
+                    phelper.append(self.nodes[nid].state)
+                else:
+                    phelper.append("N/A")
+            
+            print("    ".join(str(x) for x in phelper))
+        
+        phelper = []
+        for ql in self.qubitLabels:
+            nid = self.getQubitNodeIdInEdge(ql,None)
 
-            measured = ""
-            if self.nodes[i].measured:
-                measured = "[M]"
-
-            lbl = (
-                str(self.nodes[i].uid)
-                + "  ["
-                + str(self.nodes[i].qubit)
-                + "]  "
-                + str(np.around(s, 3))
-                + " "
-                + measured
-            )
-            nn = {}
-            nn["data"] = {}
-            nn["data"]["id"] = lbl
-
-            if self.nodes[i].edge_uid is not None:
-                euid = self.nodes[i].edge_uid
-                l_euid = euid + "  " + str(np.around(self.edges[euid].amplitude, 3))
-                nn["data"]["parent"] = l_euid
-
-            elements["nodes"].append(nn)
-
-        print(json.dumps(elements))
-    
+            if (nid is not None):
+                phelper.append(self.nodes[nid].state)
+            else:
+                phelper.append("N/A")
+            
+        print("    ".join(str(x) for x in phelper))
+        
     #
     # match [1,1,0]
     # edge {uid = ...}
@@ -869,9 +702,15 @@ class Hypergraph:
 
         #Expand mapped qubits
         fq = input_map[0]
-        for index, qubit in enumerate(input_map):
-            if index > 0:
-                self.expandQubits(input_map[index - 1], input_map[index])
+        if (len(input_map) == 1):
+            nids = self.getQubitNodeIds(fq)
+            for nid in nids:
+                node = self.nodes[nid]
+                self.splitEdgeZ(node.edge_uid,fq)
+        else:
+            for index, qubit in enumerate(input_map):
+                if index > 0:
+                    self.expandQubits(input_map[index - 1], input_map[index])
 
         for rule in rules:
             #find matches in edges
@@ -883,59 +722,3 @@ class Hypergraph:
             #find matches in system
             if (self.isMatch(rule['match'],None,input_map)):
                     self.replaceMatch(None,rule['replace'],input_map)
-
-
-    def draw(self):
-        s = hnx.Entity("system", elements=[], amplitude=1)
-        hg = hnx.Hypergraph()
-        hg.add_edge(s)
-
-        empty_system = True
-
-        if len(self.nodes) == 0:
-            print("Empty Hypergraph")
-
-        for i in self.edges:
-            edge = hnx.Entity(i + "  " + str(np.around(self.edges[i].amplitude, 3)))
-
-            hg.add_edge(edge)
-
-        for i in self.nodes:
-            # set precision to avoid awkward -zeros
-            s = []
-            for state in self.nodes[i].state:
-                s.append(np.around(state, decimals=3))
-
-            measured = ""
-            if self.nodes[i].measured:
-                measured = "[M]"
-
-            node = hnx.Entity(
-                str(self.nodes[i].uid)
-                + "  ["
-                + str(self.nodes[i].qubit)
-                + "]  "
-                + str(np.around(s, 3))
-                + " "
-                + measured
-            )
-
-            if self.nodes[i].edge_uid is None:
-                hg.add_node_to_edge(node, "system")
-                empty_system = False
-            else:
-                euid = self.nodes[i].edge_uid
-                l_euid = euid + "  " + str(np.around(self.edges[euid].amplitude, 3))
-                hg.add_node_to_edge(node, l_euid)
-
-        if empty_system:
-            hg.remove_edge("system")
-
-        """hnx.drawing.rubber_band.draw(hg,
-             node_labels=getNodeLabels(hg),
-             edge_labels=getEdgeLabels(hg),
-             node_radius=2.0,
-             label_alpha=1.0
-        )"""
-
-        hnx.drawing.two_column.draw(hg)
