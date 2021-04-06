@@ -423,38 +423,39 @@ class Hypergraph:
     def splitEdgeZ(self, edge_uid, qubit):
         node = self.nodes[self.getQubitNodeIdInEdge(qubit, edge_uid)]
 
-        if edge_uid is None:
-            # TODO This is a bit dirty ;)
-            # create an edge for the 1 component
-            edge = Hyperedge(one_ket[1])
-            self.edges[edge.uid] = edge
+        if (not self.stateEq(node.state,zero_ket) and not self.stateEq(node.state,one_ket)):
+            if edge_uid is None:
+                # TODO This is a bit dirty ;)
+                # create an edge for the 1 component
+                edge = Hyperedge(one_ket[1])
+                self.edges[edge.uid] = edge
 
-            # populate initial edge
-            for n_id in self.nodes:
-                self.addNodeToEdge(n_id, edge.uid)
-        else:
-            edge = self.edges[edge_uid]
+                # populate initial edge
+                for n_id in self.nodes:
+                    self.addNodeToEdge(n_id, edge.uid)
+            else:
+                edge = self.edges[edge_uid]
 
-        # Create Edge for the 0 component
-        e = Hyperedge(edge.amplitude * node.state[0])
-        self.edges[e.uid] = e
+            # Create Edge for the 0 component
+            e = Hyperedge(edge.amplitude * node.state[0])
+            self.edges[e.uid] = e
 
-        # recrerate the nodes of a inside the new edge
-        for n_id in edge.node_uids:
-            state = self.nodes[n_id].state
-            if n_id == node.uid:
-                state = zero_ket
+            # recrerate the nodes of a inside the new edge
+            for n_id in edge.node_uids:
+                state = self.nodes[n_id].state
+                if n_id == node.uid:
+                    state = zero_ket
 
-            p = Node(self.nodes[n_id].qubit, state)
-            p.measured = self.nodes[n_id].measured
-            self.nodes[p.uid] = p
-            self.addNodeToEdge(p.uid, e.uid)
+                p = Node(self.nodes[n_id].qubit, state)
+                p.measured = self.nodes[n_id].measured
+                self.nodes[p.uid] = p
+                self.addNodeToEdge(p.uid, e.uid)
 
-        # Update current edge to reflect the 1 component
-        edge.amplitude = edge.amplitude * node.state[1]
-        for n_id in edge.node_uids:
-            if n_id == node.uid:
-                self.nodes[n_id].state = one_ket
+            # Update current edge to reflect the 1 component
+            edge.amplitude = edge.amplitude * node.state[1]
+            for n_id in edge.node_uids:
+                if n_id == node.uid:
+                    self.nodes[n_id].state = one_ket
 
     # TODO Measure a set of qubits
     # TODO Revise preconditions for the op methods
