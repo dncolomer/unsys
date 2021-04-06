@@ -8,7 +8,7 @@ Entanglement Hypergraph Simulator
 You can install this package like this:
 
 ```shell
-pip3 install git+dncolomer/ehssim_prototype.git
+pip3 install git+dncolomer/ehsim_prototype.git
 ```
 
 Or you can clone this repository and run `pip3 install -e .` from inside the top level directory.
@@ -38,8 +38,8 @@ Let's start with a simple example: [The Bell state](https://en.wikipedia.org/wik
 Let's create a new hypergraph:
 
 ```python
-from ehssim import Hypergraph
-from ehssim.gates import H, X
+from ehsim import Hypergraph
+from ehsim.gates import H, X
 
 # start with 2 qubits:
 circuit = Hypergraph(2)
