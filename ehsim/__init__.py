@@ -572,7 +572,6 @@ class Hypergraph:
             self.combineEdges(a_edge_ids,b_edge_ids)
 
         #SPLIT a
-        print("SPLIT a")
         a_edge_ids = self.getQubitEdgeIds(a)
         if (len(a_edge_ids) != 0):
             for eid in a_edge_ids:
@@ -581,9 +580,8 @@ class Hypergraph:
             self.splitEdgeZ(None,a)
 
         #SPLIT b
-        print("SPLIT a")
         b_edge_ids = self.getQubitEdgeIds(b)
-        if (len(b_edge_ids != 0)):
+        if (len(b_edge_ids) != 0):
             for eid in b_edge_ids:
                 self.splitEdgeZ(eid,b)
         else:
@@ -635,8 +633,24 @@ class Hypergraph:
         self.deleteEdges(m)
         self.createEdges(m_simp, amps_simp, measured_qubits)
 
+    def simplifiedState(self, state):
+        if (self.stateEq(state,zero_ket)):
+            return "|0>"
+
+        if (self.stateEq(state,one_ket)):
+            return "|1>"
+
+        if (self.stateEq(state,plus_ket)):
+            return "|+>"
+
+        if (self.stateEq(state,minus_ket)):
+            return "|->"
+        
+        return str(state)
+
     def print_raw(self):
-        print("                      ".join(str(ql) for ql in self.qubitLabels))   
+        print("     ".join(str(ql) for ql in self.qubitLabels))
+        print("-----".join("--" for ql in self.qubitLabels))  
         phelper = []
         
         for e in self.edges:
@@ -645,22 +659,37 @@ class Hypergraph:
                 nid = self.getQubitNodeIdInEdge(ql,e)
 
                 if (nid is not None):
-                    phelper.append(self.nodes[nid].state)
+                    phelper.append(self.simplifiedState(self.nodes[nid].state))
                 else:
                     phelper.append("N/A")
             
+            if (len(phelper) != 0):
+                phelper.append("Amplitude:"+str(self.edges[e].amplitude))
+
             print("    ".join(str(x) for x in phelper))
         
         phelper = []
         for ql in self.qubitLabels:
             nid = self.getQubitNodeIdInEdge(ql,None)
+            systemEmpty = True
 
             if (nid is not None):
-                phelper.append(self.nodes[nid].state)
+                systemEmpty = False
+                phelper.append(self.simplifiedState(self.nodes[nid].state))
             else:
                 phelper.append("N/A")
-            
-        print("    ".join(str(x) for x in phelper))
+
+        if (not systemEmpty):
+            if (len(phelper) != 0):
+                    phelper.append("Not Entangled")
+
+            print("    ".join(str(x) for x in phelper))
+        
+        print("     ".join("  " for ql in self.qubitLabels))
+        print(self.toStateVector())
+        print("-----".join("--" for ql in self.qubitLabels))
+        print("     ".join("  " for ql in self.qubitLabels))
+        print("     ".join("  " for ql in self.qubitLabels))
         
     #
     # match [1,1,0]
