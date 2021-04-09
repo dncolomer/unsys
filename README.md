@@ -38,29 +38,35 @@ Let's start with a simple example: [The Bell state](https://en.wikipedia.org/wik
 Let's create a new hypergraph:
 
 ```python
-from ehsim import Hypergraph
-from ehsim.gates import H, X
+import ehsim.visualization as vis
 
-# start with 2 qubits:
-circuit = Hypergraph(2)
+from ehsim import Hypergraph
+from ehsim.gates import H, X, SWAP, CX, CCX
+
+# Let's start with 2 qubits
+system = Hypergraph(2)
+vis.print_raw(system)
 ```
 
 Now, let's apply the Hadamard gate to qubit 0:
 
 ```python
-circuit.apply("q0", H)
+system.rewrite(H,["q0"])
+vis.print_raw(system)
 ```
 
 And now we can apply a controlled-NOT gate:
 
 ```python
-circuit.apply("q1", X, controls=["q0"])
+system.rewrite(CX,["q0","q1"])
+vis.print_raw(system)
 ```
 
 We can now factor the qubits and see what happens:
 
 ```python
 circuit.factorQubits(["q0", "q1"])
+vis.print_raw(system)
 ```
 
 Congratulations! You just ran your first quantum hypergraph simulation!
