@@ -1,11 +1,9 @@
 from itertools import combinations
-import json
 
 import numpy as np
 
 # global variables
 node_nb = 0
-
 zero_ket = np.array([1, 0], dtype=np.complex_)
 one_ket = np.array([0, 1], dtype=np.complex_)
 plus_ket = np.array([1 / np.sqrt(2), 1 / np.sqrt(2)], dtype=np.complex_)
@@ -46,10 +44,27 @@ class Hyperedge:
 class Hypergraph:
 
     # TODO add support for register level operation in a later version
-    def __init__(self, nb_qubits, sv=[]):
+    def __init__(self, nb_qubits: int, sv: list = None, record_gates: bool = True):
+        """
+        Create a new Hypergraph simulator.
+
+        Arguments:
+            nb_qubits (int): The number of qubits to simulate
+            sv (list): A list of state vectors to initialize with
+            record_gates (bool: True): Whether to keep a log of gates as they
+                are applied. This incurs a slight performance penalty but
+                enables some useful tools like visualization.
+
+        """
         self.nodes = {}
         self.edges = {}
         self.qubitLabels = []
+
+        sv = sv or []
+
+        self._record_gates = record_gates
+        self._gate_log = []
+        self._num_qubits = nb_qubits
 
         if len(sv) > 0:
             for i in range(0, len(sv)):
@@ -79,6 +94,9 @@ class Hypergraph:
 
                 node = Node("q" + str(i), np.array([1, 0], dtype=np.complex_))
                 self.nodes[node.uid] = node
+
+    def __len__(self):
+        return self._num_qubits
 
     def normalize_complex_arr(self, a):
         norm = np.linalg.norm(a)
@@ -142,6 +160,29 @@ class Hypergraph:
             self.nodes.pop(nid)
 
         self.edges.pop(edge_uid)
+
+    def _record(self, qubits, gate: np.ndarray, controls: list = None):
+        """
+        Make a note of which gates have been applied to which qubits.
+
+        Arguments:
+            qubits (str | list[str]): A list of qubits or a single qubit name
+            gate: The gate that was applied
+            controls (optional): A list of control qubits
+
+        Returns:
+            None
+
+        """
+        if not self._record_gates:
+            return
+        # If this gate acts on a single qubit, save it as an array of length=1.
+        # This will make the gate log types consistent.
+        if isinstance(qubits, str):
+            qubits = [qubits]
+        self._gate_log.append(
+            {"gate": gate, "qubits": qubits, "controls": controls or []}
+        )
 
     # We must conbine them in distributabliy
     def combineEdges(self, a_edge_ids, b_edge_ids):
@@ -632,72 +673,6 @@ class Hypergraph:
         # process output dict
         self.deleteEdges(m)
         self.createEdges(m_simp, amps_simp, measured_qubits)
-
-    def simplifiedState(self, state):
-        if (self.stateEq(state,zero_ket)):
-            return "|0>"
-
-        if (self.stateEq(state,one_ket)):
-            return "|1>"
-
-        if (self.stateEq(state,plus_ket)):
-            return "|+>"
-
-        if (self.stateEq(state,minus_ket)):
-            return "|->"
-        
-        return str(state)
-
-    def print_raw(self):
-        print("      ".join(str(ql) for ql in self.qubitLabels))
-        print("------".join("--" for ql in self.qubitLabels))  
-        phelper = []
-        
-        for e in self.edges:
-            phelper = []
-            for ql in self.qubitLabels:
-                nid = self.getQubitNodeIdInEdge(ql,e)
-
-                if (nid is not None):
-                    replaced = ' '
-                    if (self.nodes[nid].replaced):
-                        replaced = '*'
-
-                    phelper.append(self.simplifiedState(self.nodes[nid].state)+replaced)
-                else:
-                    phelper.append("N/A")
-            
-            if (len(phelper) != 0):
-                phelper.append("Amplitude:"+str(self.edges[e].amplitude))
-
-            print("     ".join(str(x) for x in phelper))
-        
-        phelper = []
-        for ql in self.qubitLabels:
-            nid = self.getQubitNodeIdInEdge(ql,None)
-            systemEmpty = True
-
-            if (nid is not None):
-                systemEmpty = False
-                replaced = ' '
-                if (self.nodes[nid].replaced):
-                    replaced = '*'
-
-                phelper.append(self.simplifiedState(self.nodes[nid].state)+replaced)
-            else:
-                phelper.append("N/A")
-
-        if (not systemEmpty):
-            if (len(phelper) != 0):
-                    phelper.append("Not Entangled")
-
-            print("     ".join(str(x) for x in phelper))
-        
-        print("      ".join("  " for ql in self.qubitLabels))
-        print(self.toStateVector())
-        print("------".join("--" for ql in self.qubitLabels))
-        print("      ".join("  " for ql in self.qubitLabels))
-        print("      ".join("  " for ql in self.qubitLabels))
         
     #
     # match [1,1,0]
@@ -734,6 +709,9 @@ class Hypergraph:
 
     #input_map=["q0","q1","q2"]
     def rewrite(self,rules,input_map):
+        #TODO need to refactor this too account for rules and qubit mappings
+        #self._record(qubit, rules['gate'])
+
         #set all replacement tracking t False
         for n in self.nodes:
             self.nodes[n].replaced = False
@@ -750,7 +728,7 @@ class Hypergraph:
                 if index > 0:
                     self.expandQubits(input_map[index - 1], input_map[index])
 
-        for rule in rules:
+        for rule in rules['rules']:
             #find matches in edges
             # TODO if th edge has been touched previously shouldnt match anymore
             for e in self.edges:
