@@ -649,8 +649,8 @@ class Hypergraph:
         return str(state)
 
     def print_raw(self):
-        print("     ".join(str(ql) for ql in self.qubitLabels))
-        print("-----".join("--" for ql in self.qubitLabels))  
+        print("      ".join(str(ql) for ql in self.qubitLabels))
+        print("------".join("--" for ql in self.qubitLabels))  
         phelper = []
         
         for e in self.edges:
@@ -659,14 +659,18 @@ class Hypergraph:
                 nid = self.getQubitNodeIdInEdge(ql,e)
 
                 if (nid is not None):
-                    phelper.append(self.simplifiedState(self.nodes[nid].state))
+                    replaced = ' '
+                    if (self.nodes[nid].replaced):
+                        replaced = '*'
+
+                    phelper.append(self.simplifiedState(self.nodes[nid].state)+replaced)
                 else:
                     phelper.append("N/A")
             
             if (len(phelper) != 0):
                 phelper.append("Amplitude:"+str(self.edges[e].amplitude))
 
-            print("    ".join(str(x) for x in phelper))
+            print("     ".join(str(x) for x in phelper))
         
         phelper = []
         for ql in self.qubitLabels:
@@ -675,7 +679,11 @@ class Hypergraph:
 
             if (nid is not None):
                 systemEmpty = False
-                phelper.append(self.simplifiedState(self.nodes[nid].state))
+                replaced = ' '
+                if (self.nodes[nid].replaced):
+                    replaced = '*'
+
+                phelper.append(self.simplifiedState(self.nodes[nid].state)+replaced)
             else:
                 phelper.append("N/A")
 
@@ -683,13 +691,13 @@ class Hypergraph:
             if (len(phelper) != 0):
                     phelper.append("Not Entangled")
 
-            print("    ".join(str(x) for x in phelper))
+            print("     ".join(str(x) for x in phelper))
         
-        print("     ".join("  " for ql in self.qubitLabels))
+        print("      ".join("  " for ql in self.qubitLabels))
         print(self.toStateVector())
-        print("-----".join("--" for ql in self.qubitLabels))
-        print("     ".join("  " for ql in self.qubitLabels))
-        print("     ".join("  " for ql in self.qubitLabels))
+        print("------".join("--" for ql in self.qubitLabels))
+        print("      ".join("  " for ql in self.qubitLabels))
+        print("      ".join("  " for ql in self.qubitLabels))
         
     #
     # match [1,1,0]
