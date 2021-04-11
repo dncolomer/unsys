@@ -92,7 +92,7 @@ def simplifiedState(hypergraph, state):
     
     return str(state)
 
-def print_raw(hypergraph):
+def print_raw(hypergraph, simplify=True):
     print("      ".join(str(ql) for ql in hypergraph.qubitLabels))
     print("------".join("--" for ql in hypergraph.qubitLabels))  
     phelper = []
@@ -107,7 +107,10 @@ def print_raw(hypergraph):
                 if (hypergraph.nodes[nid].replaced):
                     replaced = '*'
 
-                phelper.append(simplifiedState(hypergraph,hypergraph.nodes[nid].state))
+                if (simplify):
+                    phelper.append(simplifiedState(hypergraph,hypergraph.nodes[nid].state))
+                else:
+                    phelper.append(hypergraph.nodes[nid].state)
             else:
                 phelper.append("N/A")
         
@@ -127,7 +130,10 @@ def print_raw(hypergraph):
             if (hypergraph.nodes[nid].replaced):
                 replaced = '*'
 
-            phelper.append(simplifiedState(hypergraph,hypergraph.nodes[nid].state))
+            if (simplify):
+                phelper.append(simplifiedState(hypergraph,hypergraph.nodes[nid].state))
+            else:
+                phelper.append(hypergraph.nodes[nid].state)
         else:
             phelper.append("N/A")
 
