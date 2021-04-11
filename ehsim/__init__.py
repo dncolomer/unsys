@@ -1,6 +1,8 @@
 from itertools import combinations
 
 import numpy as np
+import sympy as sp
+import sympy.physics.quantum as spq
 
 # global variables
 node_nb = 0
@@ -13,7 +15,7 @@ def getUID(prefix="id"):
     global node_nb
 
     node_nb = node_nb + 1
-    return prefix + "_" + str(node_nb - 1)
+    return prefix + str(node_nb - 1)
 
 def P2R(radii, angles):
     return radii * np.exp(1j * angles)
@@ -23,10 +25,16 @@ def R2P(x):
     return np.abs(x), np.angle(x)
 
 class Node:
-    def __init__(self, qubit, state):
-        self.uid = getUID("node")
+    def __init__(self, qubit, state=None, symbolic=True):
+        self.uid = getUID("n")
         self.qubit = qubit
+
         self.state = state
+        if (state is None):
+            self.state = spq.Ket(0)
+            if (symbolic):
+                self.state = sp.symbols(self.uid+'_0')*spq.Ket(0) + sp.symbols(self.uid+'_1')*spq.Ket(1)
+
         self.measured = False
         self.edge_uid = None
         self.replaced = False
@@ -40,11 +48,10 @@ class Hyperedge:
             self.uid = uid
         self.amplitude = amplitude
 
-
 class Hypergraph:
 
     # TODO add support for register level operation in a later version
-    def __init__(self, nb_qubits: int, sv: list = None, record_gates: bool = True):
+    def __init__(self, nb_qubits: int, sv: list = None, record_gates: bool = True, symbolic: bool = True):
         """
         Create a new Hypergraph simulator.
 
@@ -67,7 +74,9 @@ class Hypergraph:
         self._num_qubits = nb_qubits
 
         if len(sv) > 0:
-            for i in range(0, len(sv)):
+            #Refactor
+            pass
+            '''for i in range(0, len(sv)):
                 prob = sv[i].real ** 2 + sv[i].imag ** 2
                 if prob:
 
@@ -87,12 +96,12 @@ class Hypergraph:
                         self.nodes[p.uid] = p
                         # add nodes to edge
                         self.addNodeToEdge(p.uid, e.uid)
-                        j = j + 1
+                        j = j + 1'''
         else:
             for i in range(0, nb_qubits):
                 self.qubitLabels.append("q" + str(i))
 
-                node = Node("q" + str(i), np.array([1, 0], dtype=np.complex_))
+                node = Node("q" + str(i), symbolic=symbolic)
                 self.nodes[node.uid] = node
 
     def __len__(self):
@@ -255,16 +264,11 @@ class Hypergraph:
 
     def stateEq(self, state1, state2):
         # Correct for global phase
-        st1 = self.correctPhase(state1.copy())
-        st2 = self.correctPhase(state2.copy())
+        # TODO how to do the phase stuff here with Sympy?
+        #st1 = self.correctPhase(state1.copy())
+        #st2 = self.correctPhase(state2.copy())
 
-        for i, state in enumerate(st1):
-            st1[i] = np.around(state, decimals=3)
-
-        for i, state in enumerate(st2):
-            st2[i] = np.around(state, decimals=3)
-
-        return np.array_equal(st1, st2)
+        return state1 - state2 == 0
 
     # Transforms the full system
     def toStateVector(self, correctPhase=False):
@@ -464,11 +468,11 @@ class Hypergraph:
     def splitEdgeZ(self, edge_uid, qubit):
         node = self.nodes[self.getQubitNodeIdInEdge(qubit, edge_uid)]
 
-        if (not self.stateEq(node.state,zero_ket) and not self.stateEq(node.state,one_ket)):
+        if (not self.stateEq(node.state,spq.Ket(0)) and not self.stateEq(node.state,spq.Ket(1))):
             if edge_uid is None:
                 # TODO This is a bit dirty ;)
                 # create an edge for the 1 component
-                edge = Hyperedge(one_ket[1])
+                edge = Hyperedge(1)
                 self.edges[edge.uid] = edge
 
                 # populate initial edge
@@ -478,14 +482,14 @@ class Hypergraph:
                 edge = self.edges[edge_uid]
 
             # Create Edge for the 0 component
-            e = Hyperedge(edge.amplitude * node.state[0])
+            e = Hyperedge(edge.amplitude * node.state.coeff(spq.Ket(0)))
             self.edges[e.uid] = e
 
             # recrerate the nodes of a inside the new edge
             for n_id in edge.node_uids:
                 state = self.nodes[n_id].state
                 if n_id == node.uid:
-                    state = zero_ket
+                    state = spq.Ket(0)
 
                 p = Node(self.nodes[n_id].qubit, state)
                 p.measured = self.nodes[n_id].measured
@@ -493,10 +497,10 @@ class Hypergraph:
                 self.addNodeToEdge(p.uid, e.uid)
 
             # Update current edge to reflect the 1 component
-            edge.amplitude = edge.amplitude * node.state[1]
+            edge.amplitude = edge.amplitude * node.state.coeff(spq.Ket(1))
             for n_id in edge.node_uids:
                 if n_id == node.uid:
-                    self.nodes[n_id].state = one_ket
+                    self.nodes[n_id].state = spq.Ket(1)
 
     # TODO Measure a set of qubits
     # TODO Revise preconditions for the op methods
@@ -707,34 +711,34 @@ class Hypergraph:
                 self.nodes[self.getQubitNodeIdInEdge(q,euid)].state = m
                 self.nodes[self.getQubitNodeIdInEdge(q,euid)].replaced = True
 
-    #input_map=["q0","q1","q2"]
-    def rewrite(self,rules,input_map):
+    #qubit_map=["q0","q1","q2"]
+    def rewrite(self,rules,qubit_map,params_map=[]):
         #TODO need to refactor this too account for rules and qubit mappings
-        #self._record(qubit, rules['gate'])
+        #self._record(qubit, rules['name'])
 
         #set all replacement tracking t False
         for n in self.nodes:
             self.nodes[n].replaced = False
 
         #Expand mapped qubits
-        fq = input_map[0]
-        if (len(input_map) == 1):
+        fq = qubit_map[0]
+        if (len(qubit_map) == 1):
             nids = self.getQubitNodeIds(fq)
             for nid in nids:
                 node = self.nodes[nid]
                 self.splitEdgeZ(node.edge_uid,fq)
         else:
-            for index, qubit in enumerate(input_map):
+            for index, qubit in enumerate(qubit_map):
                 if index > 0:
-                    self.expandQubits(input_map[index - 1], input_map[index])
+                    self.expandQubits(qubit_map[index - 1], qubit_map[index])
 
         for rule in rules['rules']:
             #find matches in edges
             # TODO if th edge has been touched previously shouldnt match anymore
             for e in self.edges:
-                if (self.isMatch(rule['match'],e,input_map)):
-                    self.replaceMatch(e,rule['replace'],input_map)
+                if (self.isMatch(rule['match'],e,qubit_map)):
+                    self.replaceMatch(e,rule['replace'],qubit_map)
             
             #find matches in system
-            if (self.isMatch(rule['match'],None,input_map)):
-                    self.replaceMatch(None,rule['replace'],input_map)
+            if (self.isMatch(rule['match'],None,qubit_map)):
+                    self.replaceMatch(None,rule['replace'],qubit_map)

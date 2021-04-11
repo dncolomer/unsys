@@ -1,5 +1,8 @@
 import json
 import numpy as np
+import sympy as sp
+import sympy.physics.quantum as spq
+
 from ehsim.gates import H, X, SWAP, CX, CCX
 
 _gate_names = [[H, "H"], [X, "X"]]
@@ -75,16 +78,16 @@ def cytoscapeExport(hypergraph):
     print(json.dumps(elements))
 
 def simplifiedState(hypergraph, state):
-    if (hypergraph.stateEq(state,zero_ket)):
+    if (hypergraph.stateEq(state,spq.Ket(0))):
         return "|0>"
 
-    if (hypergraph.stateEq(state,one_ket)):
+    if (hypergraph.stateEq(state,spq.Ket(1))):
         return "|1>"
 
-    if (hypergraph.stateEq(state,plus_ket)):
+    if (hypergraph.stateEq(state,spq.Ket(0)/sp.sqrt(2) + spq.Ket(1)/sp.sqrt(2))):
         return "|+>"
 
-    if (hypergraph.stateEq(state,minus_ket)):
+    if (hypergraph.stateEq(state,spq.Ket(0)/sp.sqrt(2) - spq.Ket(1)/sp.sqrt(2))):
         return "|->"
     
     return str(state)
@@ -104,7 +107,7 @@ def print_raw(hypergraph):
                 if (hypergraph.nodes[nid].replaced):
                     replaced = '*'
 
-                phelper.append(simplifiedState(hypergraph,hypergraph.nodes[nid].state)+replaced)
+                phelper.append(simplifiedState(hypergraph,hypergraph.nodes[nid].state))
             else:
                 phelper.append("N/A")
         
@@ -124,7 +127,7 @@ def print_raw(hypergraph):
             if (hypergraph.nodes[nid].replaced):
                 replaced = '*'
 
-            phelper.append(simplifiedState(hypergraph,hypergraph.nodes[nid].state)+replaced)
+            phelper.append(simplifiedState(hypergraph,hypergraph.nodes[nid].state))
         else:
             phelper.append("N/A")
 
@@ -135,7 +138,7 @@ def print_raw(hypergraph):
         print("     ".join(str(x) for x in phelper))
     
     print("      ".join("  " for ql in hypergraph.qubitLabels))
-    print(hypergraph.toStateVector())
+    #print(hypergraph.toStateVector())
     print("------".join("--" for ql in hypergraph.qubitLabels))
     print("      ".join("  " for ql in hypergraph.qubitLabels))
     print("      ".join("  " for ql in hypergraph.qubitLabels))
