@@ -321,14 +321,12 @@ class Hypergraph:
                                 diff_but_measured += 1
 
                             nodes[n] = (amps[e1] * m[e1][n]) + (amps[e2] * m[e2][n])
-                            nn = nodes[n]
-                            aa = m[e1][n]
-                            bb = m[e2][n]
                         else:
                             nodes[n] = m[e1][n]
-                            nn = nodes[n]
-                            aa = m[e1][n]
-                            bb = m[e2][n]
+                        
+                        nn = nodes[n]
+                        aa = m[e1][n]
+                        bb = m[e2][n]
 
                     # We process the merge really only if the edges we compared has 0 or 1 difference and they do not contain measured qubits
                     if nb_diff <= 1 and diff_but_measured == 0:
