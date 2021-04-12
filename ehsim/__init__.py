@@ -339,7 +339,7 @@ class Hypergraph:
                         print(x)
                         print(y)
                         print("****")
-                        amps[e1 + "_" + e2] = 1#(aa * x + bb * y)# / nn
+                        amps[e1 + "_" + e2] = (aa * x + bb * y) / nn
 
                         for e3 in m:
                             if e3 != e1 and e3 != e2:
