@@ -17,13 +17,6 @@ def getUID(prefix="id"):
     node_nb = node_nb + 1
     return prefix + str(node_nb - 1)
 
-def P2R(radii, angles):
-    return radii * np.exp(1j * angles)
-
-
-def R2P(x):
-    return np.abs(x), np.angle(x)
-
 class Node:
     def __init__(self, qubit, state=None, symbolic=True):
         self.uid = getUID("n")
@@ -74,7 +67,7 @@ class Hypergraph:
         self._num_qubits = nb_qubits
 
         if len(sv) > 0:
-            #Refactor
+            #TODO refactor
             pass
             '''for i in range(0, len(sv)):
                 prob = sv[i].real ** 2 + sv[i].imag ** 2
@@ -232,46 +225,26 @@ class Hypergraph:
 
             self.deleteEdge(e_id)
 
-    def getGlobalPhase(self, state):
-        for s in state:
-            (val, angle) = R2P(s)
+    def stateEq(self, s1, s2):
+        s10_abs = sp.Abs(s1.coeff(spq.Ket(0)))
+        s10_arg = sp.arg(s1.coeff(spq.Ket(0)))
 
-            # TODO is this a good convention?
-            if val != 0:
-                return angle
+        s20_abs = sp.Abs(s2.coeff(spq.Ket(0)))
+        s20_arg = sp.arg(s2.coeff(spq.Ket(0)))
 
-        return None
+        s11_abs = sp.Abs(s1.coeff(spq.Ket(1)))
+        s11_arg = sp.arg(s1.coeff(spq.Ket(1)))
 
-    def addGlobalPhase(self, state, angle):
-        st = state.copy()
+        s21_abs = sp.Abs(s2.coeff(spq.Ket(1)))
+        s21_arg = sp.arg(s2.coeff(spq.Ket(1)))
 
-        for i, s in enumerate(st):
-            (absi, angi) = R2P(s)
-            st[i] = P2R(absi, angi + angle)
+        s1_relphase =  sp.Abs(s11_arg - s10_arg)
+        s2_relphase =  sp.Abs(s21_arg - s20_arg)
 
-        return st
-
-    def correctPhase(self, state):
-        st = state.copy()
-
-        angle = self.getGlobalPhase(st)
-
-        for i, s in enumerate(st):
-            (absi, angi) = R2P(s)
-            st[i] = P2R(absi, angi - angle)
-
-        return st
-
-    def stateEq(self, state1, state2):
-        # Correct for global phase
-        # TODO how to do the phase stuff here with Sympy?
-        #st1 = self.correctPhase(state1.copy())
-        #st2 = self.correctPhase(state2.copy())
-
-        return state1 - state2 == 0
+        return s1_relphase == s2_relphase and s10_abs == s20_abs and s11_abs == s21_abs
 
     # Transforms the full system
-    def toStateVector(self, correctPhase=False):
+    def toStateVector(self):
         sv = np.array([])
 
         # First we deal with edges and entangled qubits
@@ -300,9 +273,6 @@ class Hypergraph:
                     sv = np.around(self.nodes[node_uid].state, 3)
                 else:
                     sv = np.kron(np.around(self.nodes[node_uid].state, 3), sv)
-
-        if correctPhase:
-            sv = self.correctPhase(sv)
 
         for i, el in enumerate(sv):
             sv[i] = np.around(sv[i], 3)
@@ -334,21 +304,12 @@ class Hypergraph:
                 if e2 not in processed:
                     # can we merge e1 and e2
                     nb_diff = 0
-                    a = None
-                    b = None
-                    e = None
+                    aa = None
+                    bb = None
+                    nn = None
                     x = amps[e1]
                     y = amps[e2]
                     nodes = {}
-
-                    # First we need to get the cummulative global phase and correct locally
-                    ph1 = 0
-                    for n in m[e1]:
-                        ph1 = ph1 + self.getGlobalPhase(m[e1][n])
-
-                    ph2 = 0
-                    for n in m[e2]:
-                        ph2 = ph2 + self.getGlobalPhase(m[e2][n])
 
                     # We now try to merge the edges
                     diff_but_measured = 0
@@ -359,27 +320,26 @@ class Hypergraph:
                             if n in measured_qubits:
                                 diff_but_measured += 1
 
-                            # we add the collected global phases to each before addition
-                            st1 = self.addGlobalPhase(m[e1][n], ph1)
-                            st2 = self.addGlobalPhase(m[e2][n], ph2)
-
-                            nodes[n] = self.normalize_complex_arr(
-                                (amps[e1] * st1) + (amps[e2] * st2)
-                            )
-                            a = np.reshape(st1, (len(st1), 1))
-                            b = np.reshape(st2, (len(st2), 1))
-                            e = np.reshape(nodes[n], (len(nodes[n]), 1))
+                            nodes[n] = (amps[e1] * m[e1][n]) + (amps[e2] * m[e2][n])
+                            nn = nodes[n]
+                            aa = m[e1][n]
+                            bb = m[e2][n]
                         else:
-                            # we must take the state without global phase as we assumed we've corrected it accordingly
-                            # if merging is not successful the global phases shouldn't be altered
-                            nodes[n] = self.correctPhase(m[e1][n])
+                            nodes[n] = m[e1][n]
+                            nn = nodes[n]
+                            aa = m[e1][n]
+                            bb = m[e2][n]
 
                     # We process the merge really only if the edges we compared has 0 or 1 difference and they do not contain measured qubits
                     if nb_diff <= 1 and diff_but_measured == 0:
                         res[e1 + "_" + e2] = nodes
 
-                        te = np.transpose(e)
-                        amps[e1 + "_" + e2] = np.dot(te, (x * a + y * b))[0]
+                        print(aa)
+                        print(bb)
+                        print(x)
+                        print(y)
+                        print("****")
+                        amps[e1 + "_" + e2] = 1#(aa * x + bb * y)# / nn
 
                         for e3 in m:
                             if e3 != e1 and e3 != e2:
@@ -451,19 +411,6 @@ class Hypergraph:
 
                         if q not in non_entangled:
                             self.addNodeToEdge(node.uid, edge.uid)
-
-    # Move all node global phases are bubbled up to the corresponding edges!
-    def factorPhases(self, qubits):
-        for node_uid in self.nodes:
-            edge_uid = self.nodes[node_uid].edge_uid
-            if edge_uid is not None:
-                angle_n = self.getGlobalPhase(self.nodes[node_uid].state)
-                self.nodes[node_uid].state = self.correctPhase(
-                    self.nodes[node_uid].state
-                )
-
-                (val_e, angle_e) = R2P(self.edges[edge_uid].amplitude)
-                self.edges[edge_uid].amplitude = P2R(val_e, angle_e + angle_n)
 
     def splitEdgeZ(self, edge_uid, qubit):
         node = self.nodes[self.getQubitNodeIdInEdge(qubit, edge_uid)]
@@ -637,8 +584,10 @@ class Hypergraph:
     # Factor a specific set of entangled qubits
     # TODO add a verbose mode that explains a bit more what's going on (what's being merged)
     def factorQubits(self, qubits, steps=None, verbose=False):
-        # preprocessing: Make sure all node global phases are bubbled up to the crresponding edges!
-        self.factorPhases(qubits)
+        # preprocessing: we expand all the affected qubits to avoid global phase comparison issues
+        for index, qubit in enumerate(qubits):
+            if index > 0:
+                self.expandQubits(qubits[index - 1], qubits[index])
 
         # build matrix and check if exactly all the qubits are in hyperedges
         m = {}
