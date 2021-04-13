@@ -56,6 +56,8 @@ class Hypergraph:
                 enables some useful tools like visualization.
 
         """
+        global node_nb
+
         self.nodes = {}
         self.edges = {}
         self.qubitLabels = []
@@ -65,6 +67,8 @@ class Hypergraph:
         self._record_gates = record_gates
         self._gate_log = []
         self._num_qubits = nb_qubits
+
+        node_nb = 0
 
         if len(sv) > 0:
             #TODO refactor
