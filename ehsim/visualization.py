@@ -78,6 +78,10 @@ def cytoscapeExport(hypergraph):
     print(json.dumps(elements))
 
 def simplifiedState(hypergraph, state):
+    #This can be expensive!
+    state = sp.simplify(state)
+    state = sp.expand(state)
+
     if (hypergraph.stateEq(state,spq.Ket(0))):
         return "|0>"
 
@@ -92,7 +96,7 @@ def simplifiedState(hypergraph, state):
     
     return str(state)
 
-def print_raw(hypergraph, simplify=True):
+def print_raw(hypergraph, simplify=True, subs=[]):
     print("      ".join(str(ql) for ql in hypergraph.qubitLabels))
     print("------".join("--" for ql in hypergraph.qubitLabels))  
     phelper = []
@@ -107,15 +111,25 @@ def print_raw(hypergraph, simplify=True):
                 if (hypergraph.nodes[nid].replaced):
                     replaced = '*'
 
+                state = hypergraph.nodes[nid].state
+                for sub in subs:
+                    if (sp.symbols(sub) in state.free_symbols):
+                        state = state.subs(sp.symbols(sub),subs[sub])
+
                 if (simplify):
-                    phelper.append(simplifiedState(hypergraph,hypergraph.nodes[nid].state))
+                    phelper.append(simplifiedState(hypergraph,state))
                 else:
-                    phelper.append(hypergraph.nodes[nid].state)
+                    phelper.append(state)
             else:
                 phelper.append("N/A")
         
         if (len(phelper) != 0):
-            phelper.append("Amplitude:"+str(hypergraph.edges[e].amplitude))
+            amp = hypergraph.edges[e].amplitude
+            for sub in subs:
+                if (sp.symbols(sub) in amp.free_symbols):
+                    amp = amp.subs(sp.symbols(sub),subs[sub])
+
+            phelper.append("Amplitude:"+str(amp))
 
         print("     ".join(str(x) for x in phelper))
     
@@ -130,10 +144,15 @@ def print_raw(hypergraph, simplify=True):
             if (hypergraph.nodes[nid].replaced):
                 replaced = '*'
 
+            state = hypergraph.nodes[nid].state
+            for sub in subs:
+                if (sp.symbols(sub) in state.free_symbols):
+                    state = state.subs(sp.symbols(sub),subs[sub])
+
             if (simplify):
-                phelper.append(simplifiedState(hypergraph,hypergraph.nodes[nid].state))
+                phelper.append(simplifiedState(hypergraph,state))
             else:
-                phelper.append(hypergraph.nodes[nid].state)
+                phelper.append(state)
         else:
             phelper.append("N/A")
 

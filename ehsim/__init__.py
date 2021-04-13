@@ -320,24 +320,37 @@ class Hypergraph:
                             if n in measured_qubits:
                                 diff_but_measured += 1
 
-                            nodes[n] = (amps[e1] * m[e1][n]) + (amps[e2] * m[e2][n])
+                            st = (amps[e1] * m[e1][n]) + (amps[e2] * m[e2][n])
+                            st = sp.simplify(st)
+                            st = sp.expand(st)
+                            nodes[n] = st
                         else:
-                            nodes[n] = m[e1][n]
+                            st = m[e1][n]
+                            st = sp.simplify(st)
+                            st = sp.expand(st)
+                            nodes[n] = st
                         
                         nn = nodes[n]
                         aa = m[e1][n]
                         bb = m[e2][n]
 
+                        nn = sp.simplify(nn)
+                        nn = sp.expand(nn)
+
+                        aa = sp.simplify(aa)
+                        aa = sp.expand(aa)
+
+                        bb = sp.simplify(bb)
+                        bb = sp.expand(bb)
+
                     # We process the merge really only if the edges we compared has 0 or 1 difference and they do not contain measured qubits
                     if nb_diff <= 1 and diff_but_measured == 0:
                         res[e1 + "_" + e2] = nodes
+                        st = (aa * x + bb * y) / nn
+                        st = sp.simplify(st)
+                        st = sp.expand(st)
 
-                        print(aa)
-                        print(bb)
-                        print(x)
-                        print(y)
-                        print("****")
-                        amps[e1 + "_" + e2] = (aa * x + bb * y) / nn
+                        amps[e1 + "_" + e2] = st
 
                         for e3 in m:
                             if e3 != e1 and e3 != e2:
@@ -656,6 +669,10 @@ class Hypergraph:
 
             if (not self.nodes[self.getQubitNodeIdInEdge(q,euid)].replaced):
                 self.nodes[self.getQubitNodeIdInEdge(q,euid)].state = m
+
+                m = sp.simplify(m)
+                m = sp.expand(m)
+
                 self.nodes[self.getQubitNodeIdInEdge(q,euid)].replaced = True
 
     #qubit_map=["q0","q1","q2"]
