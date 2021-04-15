@@ -70,7 +70,7 @@ def cytoscapeExport(hypergraph):
 
         if hypergraph.nodes[i].edge_uid is not None:
             euid = hypergraph.nodes[i].edge_uid
-            l_euid = euid + "  " + str(np.around(hypergraph.edges[euid].amplitude, 3))
+            l_euid = euid + "  " + str(np.around(hypergraph.edges[euid].weight, 3))
             nn["data"]["parent"] = l_euid
 
         elements["nodes"].append(nn)
@@ -96,10 +96,25 @@ def simplifiedState(hypergraph, state):
     
     return str(state)
 
-def print_raw(hypergraph, simplify=True, subs=[]):
+def normalizeState(state):
+    k0 = state.coeff(spq.Ket(0))
+    k1 = state.coeff(spq.Ket(1))
+
+    s_w = sp.matrices.Matrix([k0, k1])
+    norm = sp.sqrt(s_w.dot(s_w))
+
+    if (k0 != 0 or k1 != 0):
+        state = k0*spq.Ket(0)/norm + k1*spq.Ket(1)/norm
+    
+    return state
+
+def print_raw(hypergraph, simplify=True, normalize=False, subs=[]):
     print("      ".join(str(ql) for ql in hypergraph.qubitLabels))
     print("------".join("--" for ql in hypergraph.qubitLabels))  
     phelper = []
+
+    if (normalize):
+        hypergraph.normalizeHypergraph()
     
     for e in hypergraph.edges:
         phelper = []
@@ -115,6 +130,9 @@ def print_raw(hypergraph, simplify=True, subs=[]):
                 for sub in subs:
                     if (sp.symbols(sub) in state.free_symbols):
                         state = state.subs(sp.symbols(sub),subs[sub])
+                
+                if (normalize):
+                    state = normalizeState(state)
 
                 if (simplify):
                     phelper.append(simplifiedState(hypergraph,state))
@@ -124,12 +142,12 @@ def print_raw(hypergraph, simplify=True, subs=[]):
                 phelper.append("N/A")
         
         if (len(phelper) != 0):
-            amp = hypergraph.edges[e].amplitude
+            amp = hypergraph.edges[e].weight
             for sub in subs:
                 if (sp.symbols(sub) in amp.free_symbols):
                     amp = amp.subs(sp.symbols(sub),subs[sub])
 
-            phelper.append("Amplitude:"+str(amp))
+            phelper.append("weight: "+str(amp))
 
         print("     ".join(str(x) for x in phelper))
     
@@ -148,6 +166,9 @@ def print_raw(hypergraph, simplify=True, subs=[]):
             for sub in subs:
                 if (sp.symbols(sub) in state.free_symbols):
                     state = state.subs(sp.symbols(sub),subs[sub])
+            
+            if (normalize):
+                state = normalizeState(state)
 
             if (simplify):
                 phelper.append(simplifiedState(hypergraph,state))

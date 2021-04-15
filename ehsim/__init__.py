@@ -33,13 +33,13 @@ class Node:
         self.replaced = False
 
 class Hyperedge:
-    def __init__(self, amplitude, uid=None):
+    def __init__(self, weight, uid=None):
         self.node_uids = []
         if uid is None:
             self.uid = getUID("edge")
         else:
             self.uid = uid
-        self.amplitude = amplitude
+        self.weight = weight
 
 class Hypergraph:
 
@@ -103,10 +103,6 @@ class Hypergraph:
 
     def __len__(self):
         return self._num_qubits
-
-    def normalize_complex_arr(self, a):
-        norm = np.linalg.norm(a)
-        return a / norm
 
     def getQubitNodeIds(self, qubit):
         uids = []
@@ -197,7 +193,7 @@ class Hypergraph:
                 a_edge = self.edges[a_id]
                 b_edge = self.edges[b_id]
 
-                e = Hyperedge(a_edge.amplitude * b_edge.amplitude)
+                e = Hyperedge(a_edge.weight * b_edge.weight)
                 self.edges[e.uid] = e
 
                 # recrerate the nodes of a inside the new edge
@@ -253,7 +249,7 @@ class Hypergraph:
 
         # First we deal with edges and entangled qubits
         for edge in self.edges:
-            parent_amplitude = self.edges[edge].amplitude
+            parent_weight = self.edges[edge].weight
             tmp_sv = np.array([])
 
             for node_uid in self.edges[edge].node_uids:
@@ -262,7 +258,7 @@ class Hypergraph:
                 else:
                     tmp_sv = np.kron(np.around(self.nodes[node_uid].state, 3), tmp_sv)
 
-            tmp_sv = parent_amplitude * tmp_sv
+            tmp_sv = parent_weight * tmp_sv
 
             if len(sv) == 0:
                 sv = tmp_sv
@@ -286,7 +282,7 @@ class Hypergraph:
     # m Hyperedge matrix
     # runs one merge
     # m isdict with edges and qubits
-    # a is dictionary with edge amplitudes
+    # a is dictionary with edge weights
 
     def factorRec(self, m, amps, measured_qubits=[], steps=None):
         if steps is not None and steps == 0:
@@ -308,9 +304,6 @@ class Hypergraph:
                 if e2 not in processed:
                     # can we merge e1 and e2
                     nb_diff = 0
-                    aa = None
-                    bb = None
-                    nn = None
                     x = amps[e1]
                     y = amps[e2]
                     nodes = {}
@@ -333,24 +326,12 @@ class Hypergraph:
                             st = sp.simplify(st)
                             st = sp.expand(st)
                             nodes[n] = st
-                        
-                        nn = nodes[n]
-                        aa = m[e1][n]
-                        bb = m[e2][n]
-
-                        nn = sp.simplify(nn)
-                        nn = sp.expand(nn)
-
-                        aa = sp.simplify(aa)
-                        aa = sp.expand(aa)
-
-                        bb = sp.simplify(bb)
-                        bb = sp.expand(bb)
 
                     # We process the merge really only if the edges we compared has 0 or 1 difference and they do not contain measured qubits
                     if nb_diff <= 1 and diff_but_measured == 0:
                         res[e1 + "_" + e2] = nodes
-                        st = (aa * x + bb * y) / nn
+                        #st = (aa * x + bb * y) / nn
+                        st = x + y
                         st = sp.simplify(st)
                         st = sp.expand(st)
 
@@ -444,7 +425,7 @@ class Hypergraph:
                 edge = self.edges[edge_uid]
 
             # Create Edge for the 0 component
-            e = Hyperedge(edge.amplitude * node.state.coeff(spq.Ket(0)))
+            e = Hyperedge(edge.weight * node.state.coeff(spq.Ket(0)))
             self.edges[e.uid] = e
 
             # recrerate the nodes of a inside the new edge
@@ -459,7 +440,7 @@ class Hypergraph:
                 self.addNodeToEdge(p.uid, e.uid)
 
             # Update current edge to reflect the 1 component
-            edge.amplitude = edge.amplitude * node.state.coeff(spq.Ket(1))
+            edge.weight = edge.weight * node.state.coeff(spq.Ket(1))
             for n_id in edge.node_uids:
                 if n_id == node.uid:
                     self.nodes[n_id].state = spq.Ket(1)
@@ -505,15 +486,32 @@ class Hypergraph:
 
         return
 
-    def normalizeEdgeAmplitudes(self):
-        ampl = []
+    def normalizeHypergraph(self):
+        #Edges
+        w = []
         for euid in self.edges:
-            ampl.append(self.edges[euid].amplitude)
+            w.append(self.edges[euid].weight)
+        
+        if (len(w) > 0):
+            s_w = sp.matrices.Matrix([w])
+            #the norm is the square root of the dot product of the vector with itself
+            norm = sp.sqrt(s_w.dot(s_w))
 
-        ampl = self.normalize_complex_arr(ampl)
+            for euid in self.edges:
+                self.edges[euid].weight = sp.simplify(self.edges[euid].weight / norm)
+        
+        #Nodes
+        for n in self.nodes:
+            state = sp.simplify(self.nodes[n].state)
+            k0 = state.coeff(spq.Ket(0))
+            k1 = state.coeff(spq.Ket(1))
 
-        for index, euid in enumerate(self.edges):
-            self.edges[euid].amplitude = ampl[index]
+            if (k0 != 0 and k1 != 0):
+                s_w = sp.matrices.Matrix([k0, k1])
+                norm = sp.sqrt(s_w.dot(s_w))
+
+                self.nodes[n].state = k0*spq.Ket(0)/norm + k1*spq.Ket(1)/norm
+
 
     # TODO calculate how much we are omitting (like Quirk does)
     def postSelectZ(self, qubits, state=zero_ket):
@@ -527,12 +525,11 @@ class Hypergraph:
                     if node.edge_uid is not None:
                         edge = self.edges[node.edge_uid]
                         loss = loss + (
-                            edge.amplitude.real ** 2 + edge.amplitude.imag ** 2
+                            edge.weight.real ** 2 + edge.weight.imag ** 2
                         )
 
                     self.deleteEdge(node.edge_uid)
 
-        self.normalizeEdgeAmplitudes()
         return loss
 
     def expandQubits(self, a, b):
@@ -616,7 +613,7 @@ class Hypergraph:
             for e in edge_ids:
                 if e not in m.keys() and qubits.index(q) == 0:
                     m[e] = {}
-                    amps[e] = self.edges[e].amplitude
+                    amps[e] = self.edges[e].weight
                 elif e not in m.keys():
                     error = "The qubits are not entangled all together"
 
