@@ -6,10 +6,6 @@ import sympy.physics.quantum as spq
 
 # global variables
 node_nb = 0
-zero_ket = np.array([1, 0], dtype=np.complex_)
-one_ket = np.array([0, 1], dtype=np.complex_)
-plus_ket = np.array([1 / np.sqrt(2), 1 / np.sqrt(2)], dtype=np.complex_)
-minus_ket = np.array([1 / np.sqrt(2), -1 / np.sqrt(2)], dtype=np.complex_)
 
 def getUID(prefix="id"):
     global node_nb
@@ -42,7 +38,6 @@ class Hyperedge:
         self.weight = weight
 
 class Hypergraph:
-
     # TODO add support for register level operation in a later version
     def __init__(self, nb_qubits: int, sv: list = None, record_gates: bool = True, symbolic: bool = True):
         """
@@ -71,29 +66,8 @@ class Hypergraph:
         node_nb = 0
 
         if len(sv) > 0:
-            #TODO refactor
+            #TODO
             pass
-            '''for i in range(0, len(sv)):
-                prob = sv[i].real ** 2 + sv[i].imag ** 2
-                if prob:
-
-                    e = Hyperedge(sv[i])
-                    self.edges[e.uid] = e
-
-                    # create nodes
-                    bits = [(i >> bit) & 1 for bit in range(nb_qubits - 1, -1, -1)]
-                    j = 0
-                    for bit in bits:
-                        self.qubitLabels.append("q" + str(j))
-
-                        p = Node(
-                            "q" + str(j), (one_ket if bit == 1 else zero_ket)
-                        )
-                        # add nodes to hgraph
-                        self.nodes[p.uid] = p
-                        # add nodes to edge
-                        self.addNodeToEdge(p.uid, e.uid)
-                        j = j + 1'''
         else:
             for i in range(0, nb_qubits):
                 self.qubitLabels.append("q" + str(i))
@@ -212,17 +186,9 @@ class Hypergraph:
 
         # Cleanup and delete the old nodes and edges
         for e_id in a_edge_ids:
-            edge = self.edges[e_id]
-            for n_id in edge.node_uids:
-                self.deleteNode(n_id)
-
             self.deleteEdge(e_id)
 
         for e_id in b_edge_ids:
-            edge = self.edges[e_id]
-            for n_id in edge.node_uids:
-                self.deleteNode(n_id)
-
             self.deleteEdge(e_id)
 
     def stateEq(self, s1, s2):
@@ -245,168 +211,63 @@ class Hypergraph:
 
     # Transforms the full system
     def toStateVector(self):
-        sv = np.array([])
+        pass
 
-        # First we deal with edges and entangled qubits
-        for edge in self.edges:
-            parent_weight = self.edges[edge].weight
-            tmp_sv = np.array([])
+    def canMergeEdges(self, euid1, euid2):
+        nuids1 = self.edges[euid1].node_uids
+        nuids2 = self.edges[euid2].node_uids
+        diff = 0
 
-            for node_uid in self.edges[edge].node_uids:
-                if len(tmp_sv) == 0:
-                    tmp_sv = np.around(self.nodes[node_uid].state, 3)
-                else:
-                    tmp_sv = np.kron(np.around(self.nodes[node_uid].state, 3), tmp_sv)
+        for nuid1 in nuids1:
+            for nuid2 in nuids2:
+                if (self.nodes[nuid1].qubit == self.nodes[nuid2].qubit and not self.stateEq(self.nodes[nuid1].state,self.nodes[nuid2].state)):
+                    diff = diff + 1
+                    if (diff > 1):
+                        return False
 
-            tmp_sv = parent_weight * tmp_sv
+        return diff <= 1
 
-            if len(sv) == 0:
-                sv = tmp_sv
-            else:
-                sv = sv + tmp_sv
+    #preconditin: we assume canMerge
+    def mergeEdges(self, euid1, euid2):
+        nuids1 = self.edges[euid1].node_uids
+        nuids2 = self.edges[euid2].node_uids
 
-        # Then we deal with the non-entangled ones
-        # Kroenecker product of all nodes
-        for node_uid in self.nodes:
-            if self.nodes[node_uid].edge_uid is None:
-                if len(sv) == 0:
-                    sv = np.around(self.nodes[node_uid].state, 3)
-                else:
-                    sv = np.kron(np.around(self.nodes[node_uid].state, 3), sv)
+        for nuid1 in nuids1:
+            for nuid2 in nuids2:
+                if (self.nodes[nuid1].qubit == self.nodes[nuid2].qubit and not self.stateEq(self.nodes[nuid1].state,self.nodes[nuid2].state)):
+                    self.nodes[nuid1].state = (self.nodes[nuid1].state * self.edges[euid1].weight) + (self.nodes[nuid2].state * self.edges[euid2].weight)
+                    #TODO update euid1 weight
+        
+        self.deleteEdge(euid2)
 
-        for i, el in enumerate(sv):
-            sv[i] = np.around(sv[i], 3)
-
-        return sv
-
-    # m Hyperedge matrix
-    # runs one merge
-    # m isdict with edges and qubits
-    # a is dictionary with edge weights
-
-    def factorRec(self, m, amps, measured_qubits=[], steps=None):
+    def factorRec(self, edge_ids = [], measured_qubits=[], steps=None):
         if steps is not None and steps == 0:
-            # Stop!
-            return (m, amps)
+            return edge_ids
 
-        if len(m.keys()) == 1:
-            return (m, amps)
+        if len(m.edge_ids()) <= 1:
+            return edge_ids
 
         if steps is not None and steps > 0:
             steps = steps - 1
 
-        res = {}
-        processed = []
-        # do one run
-        for e1 in m:
-            processed.append(e1)
-            for e2 in m:
-                if e2 not in processed:
-                    # can we merge e1 and e2
-                    nb_diff = 0
-                    x = amps[e1]
-                    y = amps[e2]
-                    nodes = {}
+        base_edge = edge_ids[0]
+        for i, cand_e in enumerate(edge_ids):
+            if (i > 0 and self.canMergeEdges(base_edge, cand_e)):
+                self.mergeEdges(base_edge, cand_e)
+                edge_ids.pop(0)
+                edge_ids.pop(i)
 
-                    # We now try to merge the edges
-                    diff_but_measured = 0
-                    for n in m[e1]:
+                return factorRec(edge_ids,measured_qubits,steps)
+        
+        return edge_ids
 
-                        if not self.stateEq(m[e1][n], m[e2][n]):
-                            nb_diff += 1
-                            if n in measured_qubits:
-                                diff_but_measured += 1
-
-                            st = (amps[e1] * m[e1][n]) + (amps[e2] * m[e2][n])
-                            st = sp.simplify(st)
-                            st = sp.expand(st)
-                            nodes[n] = st
-                        else:
-                            st = m[e1][n]
-                            st = sp.simplify(st)
-                            st = sp.expand(st)
-                            nodes[n] = st
-
-                    # We process the merge really only if the edges we compared has 0 or 1 difference and they do not contain measured qubits
-                    if nb_diff <= 1 and diff_but_measured == 0:
-                        res[e1 + "_" + e2] = nodes
-                        #st = (aa * x + bb * y) / nn
-                        st = x + y
-                        st = sp.simplify(st)
-                        st = sp.expand(st)
-
-                        amps[e1 + "_" + e2] = st
-
-                        for e3 in m:
-                            if e3 != e1 and e3 != e2:
-                                res[e3] = m[e3]
-
-                        # recursive step
-                        return self.factorRec(res, amps, measured_qubits, steps)
-
-        # If we end up here it means we havent simplified anything
-        return (m, amps)
-
-    # m Hyperedge dict
-    def deleteEdges(self, m):
-        for e in m:
-            for q in m[e]:
-                self.deleteNode(self.getQubitNodeId(q, e))
-
-            self.deleteEdge(e)
-
-    # m Hyperedge dict
-    def createEdges(self, m, amps, measured_qubits):
-        if len(m.keys()) <= 1:
-            for e in m:
-                for q in m[e]:
-                    node = Node(q, m[e][q])
-                    if q in measured_qubits:
-                        node.measured = True
-
-                    self.nodes[node.uid] = node
+    def splitAllEdgesZ(self, qubit):
+        a_edge_ids = self.getQubitEdgeIds(qubit)
+        if (len(a_edge_ids) != 0):
+            for eid in a_edge_ids:
+                self.splitEdgeZ(eid,a)
         else:
-            t = {}
-            for e in m:
-                for q in m[e]:
-                    if q not in t.keys():
-                        t[q] = {}
-
-                    t[q][e] = m[e][q]
-
-            # Check which qubits are entangled
-            non_entangled = []
-
-            # There is a big edge case here where
-            # one might still need to do a phase correction, etc.
-            # TODO
-            """for q in t:
-                q_first = None
-                all_equal = True
-                for e in t[q]:
-                    if (q_first is None):
-                        q_first = t[q][e]
-                    else:
-                        all_equal = all_equal and (self.stateEq(t[q][e],q_first))
-
-                if (all_equal):
-                    non_entangled.append(q)"""
-
-            populated_qubits = []
-            for e in m:
-                edge = Hyperedge(amps[e], e)
-                self.edges[edge.uid] = edge
-                for q in m[edge.uid]:
-                    if q not in populated_qubits or q not in non_entangled:
-                        node = Node(q, m[edge.uid][q])
-                        if q in measured_qubits:
-                            node.measured = True
-
-                        self.nodes[node.uid] = node
-                        populated_qubits.append(q)
-
-                        if q not in non_entangled:
-                            self.addNodeToEdge(node.uid, edge.uid)
+            self.splitEdgeZ(None,qubit)
 
     def splitEdgeZ(self, edge_uid, qubit):
         node = self.nodes[self.getQubitNodeIdInEdge(qubit, edge_uid)]
@@ -575,24 +436,6 @@ class Hypergraph:
         if (len(shared_edges) == 0):
             self.combineEdges(a_edge_ids,b_edge_ids)
 
-        #SPLIT a
-        a_edge_ids = self.getQubitEdgeIds(a)
-        if (len(a_edge_ids) != 0):
-            for eid in a_edge_ids:
-                self.splitEdgeZ(eid,a)
-        else:
-            self.splitEdgeZ(None,a)
-
-        #SPLIT b
-        b_edge_ids = self.getQubitEdgeIds(b)
-        if (len(b_edge_ids) != 0):
-            for eid in b_edge_ids:
-                self.splitEdgeZ(eid,b)
-        else:
-            self.splitEdgeZ(None,b)
-
-        
-
     # Factor a specific set of entangled qubits
     # TODO add a verbose mode that explains a bit more what's going on (what's being merged)
     def factorQubits(self, qubits, steps=None, verbose=False):
@@ -601,43 +444,20 @@ class Hypergraph:
             if index > 0:
                 self.expandQubits(qubits[index - 1], qubits[index])
 
-        # build matrix and check if exactly all the qubits are in hyperedges
-        m = {}
-        amps = {}
-        error = False
+        #Health check on input
         measured_qubits = []
+        edge_ids = []
         for q in qubits:
-            edge_ids = self.getQubitEdgeIds(q)
-            if len(edge_ids) == 0:
-                error = "qubit " + q + " is not entangled"
-            for e in edge_ids:
-                if e not in m.keys() and qubits.index(q) == 0:
-                    m[e] = {}
-                    amps[e] = self.edges[e].weight
-                elif e not in m.keys():
-                    error = "The qubits are not entangled all together"
-
-                for n in self.edges[e].node_uids:
-                    if self.nodes[n].qubit not in qubits:
-                        error = "The qubits are entangled with others not specified in the input"
-                    if self.nodes[n].qubit == q:
-                        m[e][q] = self.nodes[n].state
-                        if (
-                            self.nodes[n].measured
-                            and self.nodes[n].qubit not in measured_qubits
-                        ):
-                            measured_qubits.append(self.nodes[n].qubit)
-
-        if error:
-            print(error)
-            return
+            q_edge_ids = self.getQubitEdgeIds(q)
+            if (len(edge_ids) == 0):
+                edge_ids = self.getQubitEdgeIds(q)
+            else:
+                if (set(edge_ids) != set(q_edge_ids)):
+                    print("The given qubits can't be factored")
+                    return None
 
         # call recursive part
-        (m_simp, amps_simp) = self.factorRec(m, amps, measured_qubits, steps)
-
-        # process output dict
-        self.deleteEdges(m)
-        self.createEdges(m_simp, amps_simp, measured_qubits)
+        return self.factorRec(edge_ids= edge_ids, measured_qubits= measured_qubits, steps= steps)
         
     #
     # match [1,1,0]
@@ -685,17 +505,13 @@ class Hypergraph:
         for n in self.nodes:
             self.nodes[n].replaced = False
 
-        #Expand mapped qubits
-        fq = qubit_map[0]
-        if (len(qubit_map) == 1):
-            nids = self.getQubitNodeIds(fq)
-            for nid in nids:
-                node = self.nodes[nid]
-                self.splitEdgeZ(node.edge_uid,fq)
-        else:
-            for index, qubit in enumerate(qubit_map):
-                if index > 0:
-                    self.expandQubits(qubit_map[index - 1], qubit_map[index])
+        #Expand & split mapped qubits
+        for index, qubit in enumerate(qubit_map):
+            if index > 0:
+                self.expandQubits(qubit_map[index - 1], qubit_map[index])
+        
+        for qubit in qubit_map:
+            self.splitAllEdgesZ(qubit)
 
         for rule in rules['rules']:
             #find matches in edges
