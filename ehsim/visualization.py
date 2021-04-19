@@ -94,27 +94,14 @@ def simplifiedState(hypergraph, state):
     if (hypergraph.stateEq(state,spq.Ket(0)/sp.sqrt(2) - spq.Ket(1)/sp.sqrt(2))):
         return "|->"
     
+    state = sp.simplify(state)
+    
     return str(state)
 
-def normalizeState(state):
-    k0 = state.coeff(spq.Ket(0))
-    k1 = state.coeff(spq.Ket(1))
-
-    s_w = sp.matrices.Matrix([k0, k1])
-    norm = sp.sqrt(s_w.dot(s_w))
-
-    if (k0 != 0 or k1 != 0):
-        state = k0*spq.Ket(0)/norm + k1*spq.Ket(1)/norm
-    
-    return state
-
-def print_raw(hypergraph, simplify=True, normalize=False, subs=[]):
+def print_raw(hypergraph, simplify=True, subs=[]):
     print("      ".join(str(ql) for ql in hypergraph.qubitLabels))
     print("------".join("--" for ql in hypergraph.qubitLabels))  
     phelper = []
-
-    if (normalize):
-        hypergraph.normalizeHypergraph()
     
     for e in hypergraph.edges:
         phelper = []
@@ -130,9 +117,6 @@ def print_raw(hypergraph, simplify=True, normalize=False, subs=[]):
                 for sub in subs:
                     if (sp.symbols(sub) in state.free_symbols):
                         state = state.subs(sp.symbols(sub),subs[sub])
-                
-                if (normalize):
-                    state = normalizeState(state)
 
                 if (simplify):
                     phelper.append(simplifiedState(hypergraph,state))
@@ -166,9 +150,6 @@ def print_raw(hypergraph, simplify=True, normalize=False, subs=[]):
             for sub in subs:
                 if (sp.symbols(sub) in state.free_symbols):
                     state = state.subs(sp.symbols(sub),subs[sub])
-            
-            if (normalize):
-                state = normalizeState(state)
 
             if (simplify):
                 phelper.append(simplifiedState(hypergraph,state))

@@ -235,22 +235,10 @@ class Hypergraph:
         #reusing euid1 as a result edge
         for nuid1 in nuids1:
             for nuid2 in nuids2:
-                print("Equal?")
-                print(self.nodes[nuid1].qubit)
-                print(self.nodes[nuid2].qubit)
-                print(self.nodes[nuid1].state)
-                print(self.nodes[nuid2].state)
-                print("Answer:")
-                print(self.stateEq(self.nodes[nuid1].state,self.nodes[nuid2].state))
-                print("******")
                 if (self.nodes[nuid1].qubit == self.nodes[nuid2].qubit and not self.stateEq(self.nodes[nuid1].state,self.nodes[nuid2].state)):
-                    print("Merging node")
-                    print((self.nodes[nuid1].state * self.edges[euid1].weight))
-                    print((self.nodes[nuid2].state * self.edges[euid2].weight))
                     self.nodes[nuid1].state = (self.nodes[nuid1].state * self.edges[euid1].weight) + (self.nodes[nuid2].state * self.edges[euid2].weight)
                 
         self.edges[euid1].weight = self.edges[euid1].weight + self.edges[euid2].weight
-        
         self.deleteEdge(euid2)
 
         return euid1
@@ -364,20 +352,6 @@ class Hypergraph:
                         self.splitEdgeZ(e_id, node.qubit)
 
         return'''
-
-    def normalizeHypergraph(self):
-        #Edges
-        w = []
-        for euid in self.edges:
-            w.append(self.edges[euid].weight)
-        
-        if (len(w) > 0):
-            s_w = sp.matrices.Matrix([w])
-            #the norm is the square root of the dot product of the vector with itself
-            norm = sp.sqrt(s_w.dot(s_w))
-
-            for euid in self.edges:
-                self.edges[euid].weight = sp.simplify(self.edges[euid].weight / norm)
         
         #Nodes
         for n in self.nodes:
@@ -455,9 +429,27 @@ class Hypergraph:
         if (len(shared_edges) == 0):
             self.combineEdges(a_edge_ids,b_edge_ids)
 
+    def factorQubit(self, edge_ids, qubit):
+        pass
+
+    def factorQubits(self, edge_ids, qubits):
+        #If only 1 edge is virtually left we can assume the weight is one and therefore can be ignored
+        for i,q in enumerate(qubits):
+            canFactor = True
+            for euid in edge_ids:
+                if (i > 0):
+                    p = self.getQubitNodeIdInEdge(qubits[i],euid)
+                    q = self.getQubitNodeIdInEdge(qubits[i-1],euid)
+                    if (not self.stateEq(self.nodes[p].state,self.nodes[q].state)):
+                        canFactor = False
+                        break
+            
+            if (canFactor):
+                self.factorQubit(edge_ids, q)
+
     # Factor a specific set of entangled qubits
     # TODO add a verbose mode that explains a bit more what's going on (what's being merged)
-    def simplify(self, qubits, steps=None, verbose=False):
+    def simplify(self, qubits, steps=None, verbose=False, factor=True):
         # preprocessing: we expand all the affected qubits to avoid global phase comparison issues
         for index, qubit in enumerate(qubits):
             if index > 0:
@@ -476,7 +468,11 @@ class Hypergraph:
                     return None
 
         # call recursive part
-        return self.simplifyRec(edge_ids= edge_ids, measured_qubits= measured_qubits, steps= steps)
+        result_edge_ids = self.simplifyRec(edge_ids= edge_ids, measured_qubits= measured_qubits, steps= steps)
+        
+        if (factor):
+            self.factorQubits(result_edge_ids,qubits)
+            
         
     #
     # match [1,1,0]
