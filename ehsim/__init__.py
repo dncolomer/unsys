@@ -232,32 +232,49 @@ class Hypergraph:
         nuids1 = self.edges[euid1].node_uids
         nuids2 = self.edges[euid2].node_uids
 
+        #reusing euid1 as a result edge
         for nuid1 in nuids1:
             for nuid2 in nuids2:
+                print("Equal?")
+                print(self.nodes[nuid1].qubit)
+                print(self.nodes[nuid2].qubit)
+                print(self.nodes[nuid1].state)
+                print(self.nodes[nuid2].state)
+                print("Answer:")
+                print(self.stateEq(self.nodes[nuid1].state,self.nodes[nuid2].state))
+                print("******")
                 if (self.nodes[nuid1].qubit == self.nodes[nuid2].qubit and not self.stateEq(self.nodes[nuid1].state,self.nodes[nuid2].state)):
+                    print("Merging node")
+                    print((self.nodes[nuid1].state * self.edges[euid1].weight))
+                    print((self.nodes[nuid2].state * self.edges[euid2].weight))
                     self.nodes[nuid1].state = (self.nodes[nuid1].state * self.edges[euid1].weight) + (self.nodes[nuid2].state * self.edges[euid2].weight)
-                    #TODO update euid1 weight
+                
+        self.edges[euid1].weight = self.edges[euid1].weight + self.edges[euid2].weight
         
         self.deleteEdge(euid2)
 
-    def factorRec(self, edge_ids = [], measured_qubits=[], steps=None):
+        return euid1
+
+    def simplifyRec(self, edge_ids = [], measured_qubits=[], steps=None):
         if steps is not None and steps == 0:
             return edge_ids
 
-        if len(m.edge_ids()) <= 1:
+        if (len(edge_ids)) <= 1:
             return edge_ids
 
         if steps is not None and steps > 0:
             steps = steps - 1
 
-        base_edge = edge_ids[0]
-        for i, cand_e in enumerate(edge_ids):
-            if (i > 0 and self.canMergeEdges(base_edge, cand_e)):
-                self.mergeEdges(base_edge, cand_e)
-                edge_ids.pop(0)
-                edge_ids.pop(i)
+        for i, base_e in enumerate(edge_ids):
+            for j, cand_e in enumerate(edge_ids):
+                if (i != j and self.canMergeEdges(base_e, cand_e)):
+                    new_edge_id = self.mergeEdges(base_e, cand_e)
+                    #Update the list of edge ids
+                    edge_ids.remove(base_e)
+                    edge_ids.remove(cand_e)
+                    edge_ids.append(new_edge_id)
 
-                return factorRec(edge_ids,measured_qubits,steps)
+                    return self.simplifyRec(edge_ids,measured_qubits,steps)
         
         return edge_ids
 
@@ -312,8 +329,9 @@ class Hypergraph:
     # TODO probably don't allow for any gates on non measured nodes (maybe bitflips?)
     # TODO we lose the measurement labels when factoring
     def measure(self, qubits):
+        pass
         # iterate over each hyper edge the qubit is in
-        for q in qubits:
+        '''for q in qubits:
             edge_ids = self.getQubitEdgeIds(q)
             if len(edge_ids) == 0:
                 # if the qubit is in the comp. basis then we just flag it as measured = True
@@ -345,7 +363,7 @@ class Hypergraph:
                         # One where the node will be in the 1 state + measured = True
                         self.splitEdgeZ(e_id, node.qubit)
 
-        return
+        return'''
 
     def normalizeHypergraph(self):
         #Edges
@@ -375,8 +393,9 @@ class Hypergraph:
 
 
     # TODO calculate how much we are omitting (like Quirk does)
-    def postSelectZ(self, qubits, state=zero_ket):
-        self.measure(qubits)
+    def postSelectZ(self, qubits, state):
+        pass
+        '''self.measure(qubits)
         loss = 0
         for qubit in qubits:
             nodeIds = self.getQubitNodeIds(qubit)
@@ -391,9 +410,9 @@ class Hypergraph:
 
                     self.deleteEdge(node.edge_uid)
 
-        return loss
+        return loss'''
 
-    def expandQubits(self, a, b):
+    def expand(self, a, b):
         #if one of the qubits is not entangled but the other is we need to add the qubit to all corresponding edges before we start with the operation (sort of decompress)
         #preprocessing NOT tested
         a_edge_ids = self.getQubitEdgeIds(a)
@@ -438,11 +457,11 @@ class Hypergraph:
 
     # Factor a specific set of entangled qubits
     # TODO add a verbose mode that explains a bit more what's going on (what's being merged)
-    def factorQubits(self, qubits, steps=None, verbose=False):
+    def simplify(self, qubits, steps=None, verbose=False):
         # preprocessing: we expand all the affected qubits to avoid global phase comparison issues
         for index, qubit in enumerate(qubits):
             if index > 0:
-                self.expandQubits(qubits[index - 1], qubits[index])
+                self.expand(qubits[index - 1], qubits[index])
 
         #Health check on input
         measured_qubits = []
@@ -457,7 +476,7 @@ class Hypergraph:
                     return None
 
         # call recursive part
-        return self.factorRec(edge_ids= edge_ids, measured_qubits= measured_qubits, steps= steps)
+        return self.simplifyRec(edge_ids= edge_ids, measured_qubits= measured_qubits, steps= steps)
         
     #
     # match [1,1,0]
@@ -508,7 +527,7 @@ class Hypergraph:
         #Expand & split mapped qubits
         for index, qubit in enumerate(qubit_map):
             if index > 0:
-                self.expandQubits(qubit_map[index - 1], qubit_map[index])
+                self.expand(qubit_map[index - 1], qubit_map[index])
         
         for qubit in qubit_map:
             self.splitAllEdgesZ(qubit)
