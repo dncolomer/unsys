@@ -430,20 +430,26 @@ class Hypergraph:
             self.combineEdges(a_edge_ids,b_edge_ids)
 
     def factorQubit(self, edge_ids, qubit):
-        pass
+        for edge_id in edge_ids:
+            node_id = self.getQubitNodeIdInEdge(qubit,edge_id)
+            self.nodes[node_id].edge_uid = None
+            self.edges[edge_id].node_uids.remove(node_id)
+
+            if (len(self.edges[edge_id].node_uids) == 0):
+                self.deleteEdge(edge_id)
 
     def factorQubits(self, edge_ids, qubits):
         #If only 1 edge is virtually left we can assume the weight is one and therefore can be ignored
-        for i,q in enumerate(qubits):
+        for q in qubits:
             canFactor = True
-            for euid in edge_ids:
+            for i,euid in enumerate(edge_ids):
                 if (i > 0):
-                    p = self.getQubitNodeIdInEdge(qubits[i],euid)
-                    q = self.getQubitNodeIdInEdge(qubits[i-1],euid)
-                    if (not self.stateEq(self.nodes[p].state,self.nodes[q].state)):
+                    q1 = self.getQubitNodeIdInEdge(q,edge_ids[i])
+                    q2 = self.getQubitNodeIdInEdge(q,edge_ids[i-1])
+                    if (not self.stateEq(self.nodes[q1].state,self.nodes[q2].state)):
                         canFactor = False
                         break
-            
+
             if (canFactor):
                 self.factorQubit(edge_ids, q)
 
