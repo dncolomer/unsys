@@ -5,7 +5,7 @@ import sympy as sp
 import sympy.physics.quantum as spq
 
 # global variables
-node_nb = 0
+node_nb = 1
 
 def getUID(prefix="id"):
     global node_nb
