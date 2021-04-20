@@ -160,6 +160,12 @@ class Hypergraph:
             {"gate": gate, "qubits": qubits, "controls": controls or []}
         )
 
+    def expandQubits(self, qubits):
+        pass #TODO
+        for index, qubit in enumerate(qubits):
+            if index > 0:
+                self.expand(qubits[index - 1], qubits[index])
+
     # We must conbine them in distributabliy
     def combineEdges(self, a_edge_ids, b_edge_ids):
         for a_id in a_edge_ids:
