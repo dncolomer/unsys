@@ -354,19 +354,6 @@ class Hypergraph:
                         self.splitEdgeZ(e_id, node.qubit)
 
         return
-        
-        #Nodes
-        for n in self.nodes:
-            state = sp.simplify(self.nodes[n].state)
-            k0 = state.coeff(spq.Ket(0))
-            k1 = state.coeff(spq.Ket(1))
-
-            if (k0 != 0 and k1 != 0):
-                s_w = sp.matrices.Matrix([k0, k1])
-                norm = sp.sqrt(s_w.dot(s_w))
-
-                self.nodes[n].state = k0*spq.Ket(0)/norm + k1*spq.Ket(1)/norm
-
 
     # TODO calculate how much we are omitting (like Quirk does)
     def postSelectZ(self, qubits, state):
