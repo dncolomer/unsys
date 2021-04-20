@@ -217,15 +217,18 @@ class Hypergraph:
         nuids1 = self.edges[euid1].node_uids
         nuids2 = self.edges[euid2].node_uids
         diff = 0
+        diff_measured = False
 
         for nuid1 in nuids1:
             for nuid2 in nuids2:
                 if (self.nodes[nuid1].qubit == self.nodes[nuid2].qubit and not self.stateEq(self.nodes[nuid1].state,self.nodes[nuid2].state)):
                     diff = diff + 1
+                    diff_measured = self.nodes[nuid1].measured or self.nodes[nuid2].measured
+
                     if (diff > 1):
                         return False
 
-        return diff <= 1
+        return diff < 1 or (diff == 1 and not diff_measured)
 
     #preconditin: we assume canMerge
     def mergeEdges(self, euid1, euid2):
@@ -317,9 +320,8 @@ class Hypergraph:
     # TODO probably don't allow for any gates on non measured nodes (maybe bitflips?)
     # TODO we lose the measurement labels when factoring
     def measure(self, qubits):
-        pass
         # iterate over each hyper edge the qubit is in
-        '''for q in qubits:
+        for q in qubits:
             edge_ids = self.getQubitEdgeIds(q)
             if len(edge_ids) == 0:
                 # if the qubit is in the comp. basis then we just flag it as measured = True
@@ -328,8 +330,8 @@ class Hypergraph:
                 # self.nodes[node.uid].state = self.correctPhase(node.state)
                 node = self.nodes[self.getQubitNodeIdInEdge(q, None)]
                 self.nodes[node.uid].measured = True
-                if not self.stateEq(node.state, one_ket) and not self.stateEq(
-                    node.state, zero_ket
+                if not self.stateEq(node.state, spq.Ket(1)) and not self.stateEq(
+                    node.state, spq.Ket(0)
                 ):
                     # if the qubit is not then we need to split the edge into 2.
                     # One where the node will be in the 0 state + measured = True
@@ -343,15 +345,15 @@ class Hypergraph:
                     # self.nodes[node.uid].state = self.correctPhase(node.state)
                     node = self.nodes[self.getQubitNodeIdInEdge(q, e_id)]
                     self.nodes[node.uid].measured = True
-                    if not self.stateEq(node.state, one_ket) and not self.stateEq(
-                        node.state, zero_ket
+                    if not self.stateEq(node.state, spq.Ket(1)) and not self.stateEq(
+                        node.state, spq.Ket(0)
                     ):
                         # if the qubit is not then we need to split the edge into 2.
                         # One where the node will be in the 0 state + measured = True
                         # One where the node will be in the 1 state + measured = True
                         self.splitEdgeZ(e_id, node.qubit)
 
-        return'''
+        return
         
         #Nodes
         for n in self.nodes:
@@ -368,23 +370,22 @@ class Hypergraph:
 
     # TODO calculate how much we are omitting (like Quirk does)
     def postSelectZ(self, qubits, state):
-        pass
-        '''self.measure(qubits)
+        self.measure(qubits)
         loss = 0
         for qubit in qubits:
             nodeIds = self.getQubitNodeIds(qubit)
             for nodeId in nodeIds:
                 node = self.nodes[nodeId]
-                if not self.stateEq(node.state, state):
-                    if node.edge_uid is not None:
+                if (not self.stateEq(node.state, state)):
+                    if (node.edge_uid is not None):
                         edge = self.edges[node.edge_uid]
-                        loss = loss + (
+                        '''loss = loss + (
                             edge.weight.real ** 2 + edge.weight.imag ** 2
-                        )
+                        )'''
 
                     self.deleteEdge(node.edge_uid)
 
-        return loss'''
+        return loss
 
     def expand(self, a, b):
         #if one of the qubits is not entangled but the other is we need to add the qubit to all corresponding edges before we start with the operation (sort of decompress)
