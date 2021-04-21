@@ -75,6 +75,51 @@ class Hypergraph:
                 node = Node("q" + str(i), symbolic=symbolic)
                 self.nodes[node.uid] = node
 
+###############################################################
+# UTILS
+###############################################################
+
+    def stateEq(self, s1, s2):
+        s10_abs = sp.Abs(s1.coeff(spq.Ket(0)))
+        s10_arg = sp.arg(s1.coeff(spq.Ket(0)))
+
+        s20_abs = sp.Abs(s2.coeff(spq.Ket(0)))
+        s20_arg = sp.arg(s2.coeff(spq.Ket(0)))
+
+        s11_abs = sp.Abs(s1.coeff(spq.Ket(1)))
+        s11_arg = sp.arg(s1.coeff(spq.Ket(1)))
+
+        s21_abs = sp.Abs(s2.coeff(spq.Ket(1)))
+        s21_arg = sp.arg(s2.coeff(spq.Ket(1)))
+
+        s1_relphase =  sp.Abs(s11_arg - s10_arg)
+        s2_relphase =  sp.Abs(s21_arg - s20_arg)
+
+        return s1_relphase == s2_relphase and s10_abs == s20_abs and s11_abs == s21_abs
+
+    def _record(self, qubits, gate: np.ndarray, controls: list = None):
+        """
+        Make a note of which gates have been applied to which qubits.
+
+        Arguments:
+            qubits (str | list[str]): A list of qubits or a single qubit name
+            gate: The gate that was applied
+            controls (optional): A list of control qubits
+
+        Returns:
+            None
+
+        """
+        if not self._record_gates:
+            return
+        # If this gate acts on a single qubit, save it as an array of length=1.
+        # This will make the gate log types consistent.
+        if isinstance(qubits, str):
+            qubits = [qubits]
+        self._gate_log.append(
+            {"gate": gate, "qubits": qubits, "controls": controls or []}
+        )
+
     def __len__(self):
         return self._num_qubits
 
@@ -120,6 +165,14 @@ class Hypergraph:
             self.nodes[node_uid].edge_uid = edge_uid
             self.edges[edge_uid].node_uids.append(node_uid)
 
+    def moveNodeToEdge(self, node_uid, src_edge_uid, target_edge_uid):
+        # assign to target
+        self.nodes[node_uid].edge_uid = target_edge_uid
+        #pop from src
+        self.edges[src_edge_uid].node_uids.pop(self.edges[src_edge_uid].node_uids.index(node_uid))
+        #append to target
+        self.edges[target_edge_uid].node_uids.append(node_uid)
+
     def deleteNode(self, node_uid):
         # assuming nodes only belong to one element
         if node_uid in self.nodes.keys():
@@ -137,194 +190,166 @@ class Hypergraph:
 
         self.edges.pop(edge_uid)
 
-    def _record(self, qubits, gate: np.ndarray, controls: list = None):
-        """
-        Make a note of which gates have been applied to which qubits.
+###############################################################
+# MERGE STATES
+###############################################################
 
-        Arguments:
-            qubits (str | list[str]): A list of qubits or a single qubit name
-            gate: The gate that was applied
-            controls (optional): A list of control qubits
-
-        Returns:
-            None
-
-        """
-        if not self._record_gates:
-            return
-        # If this gate acts on a single qubit, save it as an array of length=1.
-        # This will make the gate log types consistent.
-        if isinstance(qubits, str):
-            qubits = [qubits]
-        self._gate_log.append(
-            {"gate": gate, "qubits": qubits, "controls": controls or []}
-        )
-
-    def expandQubits(self, qubits):
-        pass #TODO
-        for index, qubit in enumerate(qubits):
-            if index > 0:
-                self.expand(qubits[index - 1], qubits[index])
-
-    # We must conbine them in distributabliy
-    def combineEdges(self, a_edge_ids, b_edge_ids):
-        for a_id in a_edge_ids:
-            for b_id in b_edge_ids:
-                a_edge = self.edges[a_id]
-                b_edge = self.edges[b_id]
-
-                e = Hyperedge(a_edge.weight * b_edge.weight)
-                self.edges[e.uid] = e
-
-                # recrerate the nodes of a inside the new edge
-                for n_id in a_edge.node_uids:
-                    p = Node(self.nodes[n_id].qubit, self.nodes[n_id].state)
-                    p.measured = self.nodes[n_id].measured
-                    self.nodes[p.uid] = p
-                    self.addNodeToEdge(p.uid, e.uid)
-
-                # recrerate the nodes of b inside the new edge
-                for n_id in b_edge.node_uids:
-                    p = Node(self.nodes[n_id].qubit, self.nodes[n_id].state)
-                    p.measured = self.nodes[n_id].measured
-                    self.nodes[p.uid] = p
-                    self.addNodeToEdge(p.uid, e.uid)
-
-        # Cleanup and delete the old nodes and edges
-        for e_id in a_edge_ids:
-            self.deleteEdge(e_id)
-
-        for e_id in b_edge_ids:
-            self.deleteEdge(e_id)
-
-    def stateEq(self, s1, s2):
-        s10_abs = sp.Abs(s1.coeff(spq.Ket(0)))
-        s10_arg = sp.arg(s1.coeff(spq.Ket(0)))
-
-        s20_abs = sp.Abs(s2.coeff(spq.Ket(0)))
-        s20_arg = sp.arg(s2.coeff(spq.Ket(0)))
-
-        s11_abs = sp.Abs(s1.coeff(spq.Ket(1)))
-        s11_arg = sp.arg(s1.coeff(spq.Ket(1)))
-
-        s21_abs = sp.Abs(s2.coeff(spq.Ket(1)))
-        s21_arg = sp.arg(s2.coeff(spq.Ket(1)))
-
-        s1_relphase =  sp.Abs(s11_arg - s10_arg)
-        s2_relphase =  sp.Abs(s21_arg - s20_arg)
-
-        return s1_relphase == s2_relphase and s10_abs == s20_abs and s11_abs == s21_abs
-
-    # Transforms the full system
-    def toStateVector(self):
+    #This is where we merge single system states into one edge superposing the comp. basis 
+    def mergeStates(self, qubits):
         pass
 
-    def canMergeEdges(self, euid1, euid2):
-        nuids1 = self.edges[euid1].node_uids
-        nuids2 = self.edges[euid2].node_uids
-        diff = 0
-        diff_measured = False
+###############################################################
+# SPLIT STATES
+###############################################################
 
-        for nuid1 in nuids1:
-            for nuid2 in nuids2:
-                if (self.nodes[nuid1].qubit == self.nodes[nuid2].qubit and not self.stateEq(self.nodes[nuid1].state,self.nodes[nuid2].state)):
-                    diff = diff + 1
-                    diff_measured = self.nodes[nuid1].measured or self.nodes[nuid2].measured
+    #This is where we split single system states into one edge per computational base 
+    def splitStates(self, qubits):
+        pass
 
-                    if (diff > 1):
-                        return False
+###############################################################
+# SIMPLIFY
+###############################################################
 
-        return diff < 1 or (diff == 1 and not diff_measured)
+    #This is to apply interference effects
+    #Can only be done if all qubits can be composed
+    def simplifyQubits(self, qubits):
+        pass
 
-    #preconditin: we assume canMerge
-    def mergeEdges(self, euid1, euid2):
-        nuids1 = self.edges[euid1].node_uids
-        nuids2 = self.edges[euid2].node_uids
+###############################################################
+# COMPOSE
+###############################################################
+    
+    def composeEdges(base_e, cand_e, qubits):
+        pass
 
-        #reusing euid1 as a result edge
-        for nuid1 in nuids1:
-            for nuid2 in nuids2:
-                if (self.nodes[nuid1].qubit == self.nodes[nuid2].qubit and not self.stateEq(self.nodes[nuid1].state,self.nodes[nuid2].state)):
-                    self.nodes[nuid1].state = (self.nodes[nuid1].state * self.edges[euid1].weight) + (self.nodes[nuid2].state * self.edges[euid2].weight)
-                
-        self.edges[euid1].weight = self.edges[euid1].weight + self.edges[euid2].weight
-        self.deleteEdge(euid2)
+    def canComposeEdges(base_e, cand_e, qubits):
+        pass
+    
+    def composeRec(eids, qubits):
+        pass
 
-        return euid1
+    def composeQubits(self, qubits):
+        pass
 
-    def simplifyRec(self, edge_ids = [], measured_qubits=[], steps=None):
-        if steps is not None and steps == 0:
-            return edge_ids
+###############################################################
+# DECOMPOSE
+###############################################################
 
-        if (len(edge_ids)) <= 1:
-            return edge_ids
+    def decomposeEdges(base_e, cand_e, qubits):
+        new_e = Hyperedge(1)
+        for q in qubits:
+            base_n = self.getQubitNodeIdInEdge(q,base_e)
+            cand_n = self.getQubitNodeIdInEdge(q,cand_e)
 
-        if steps is not None and steps > 0:
-            steps = steps - 1
+            self.moveNodeToEdge(base_n,base_e,new_e)
+            self.deleteNode(cand_n)
+            
 
-        for i, base_e in enumerate(edge_ids):
-            for j, cand_e in enumerate(edge_ids):
-                if (i != j and self.canMergeEdges(base_e, cand_e)):
-                    new_edge_id = self.mergeEdges(base_e, cand_e)
+    def canDecomposeEdges(base_e, cand_e, qubits):
+        for q in qubits:
+            base_n = self.getQubitNodeIdInEdge(q,base_e)
+            cand_n = self.getQubitNodeIdInEdge(q,cand_e)
+
+            if (not self.stateEq(self.nodes[base_n].state, self.nodes[cand_e].state)):
+                return False
+
+        return True
+
+    def decomposeRec(eids, qubits):
+        if (len(eids)) <= 1:
+            return eids
+
+        for i, base_e in enumerate(eids):
+            for j, cand_e in enumerate(eids):
+                if (i != j and self.canDecomposeEdges(base_e, cand_e, qubits)):
+                    self.decomposeEdges(base_e, cand_e, qubits)
+                    
                     #Update the list of edge ids
-                    edge_ids.remove(base_e)
-                    edge_ids.remove(cand_e)
-                    edge_ids.append(new_edge_id)
+                    eids.remove(base_e)
+                    eids.remove(cand_e)
 
-                    return self.simplifyRec(edge_ids,measured_qubits,steps)
+                    return self.decomposeRec(eids, qubits)
         
-        return edge_ids
+        return eids
 
-    def splitAllEdgesZ(self, qubit):
-        a_edge_ids = self.getQubitEdgeIds(qubit)
-        if (len(a_edge_ids) != 0):
-            for eid in a_edge_ids:
-                self.splitEdgeZ(eid,a)
-        else:
-            self.splitEdgeZ(None,qubit)
+    def decomposeQubits(self, qubits):
+        eids_base = []
 
-    def splitEdgeZ(self, edge_uid, qubit):
-        node = self.nodes[self.getQubitNodeIdInEdge(qubit, edge_uid)]
-
-        if (not self.stateEq(node.state,spq.Ket(0)) and not self.stateEq(node.state,spq.Ket(1))):
-            if edge_uid is None:
-                # TODO This is a bit dirty ;)
-                # create an edge for the 1 component
-                edge = Hyperedge(1)
-                self.edges[edge.uid] = edge
-
-                # populate initial edge
-                for n_id in self.nodes:
-                    self.addNodeToEdge(n_id, edge.uid)
+        # Check if we can decompose
+        for i,q in enumerate(qubits):
+            if (i == 0):
+                eids_base = self.getQubitEdgeIds(q)
             else:
-                edge = self.edges[edge_uid]
+                if (set(eids_base) != self.getQubitEdgeIds(q)):
+                    print("The given qubits can't be factored")
+                    return None
+        
+        return decomposeRec(eids_base, qubits)
 
-            # Create Edge for the 0 component
-            e = Hyperedge(edge.weight * node.state.coeff(spq.Ket(0)))
-            self.edges[e.uid] = e
+###############################################################
+# REWRITE
+###############################################################
 
-            # recrerate the nodes of a inside the new edge
-            for n_id in edge.node_uids:
-                state = self.nodes[n_id].state
-                if n_id == node.uid:
-                    state = spq.Ket(0)
+    # match [1,1,0]
+    # edge {uid = ...}
+    # map ["q0","q1","q2"]
+    def isMatch(self,match,edge,qubit_map):
+        euid = None
+        if (edge is not None):
+            euid = self.edges[edge].uid
 
-                p = Node(self.nodes[n_id].qubit, state)
-                p.measured = self.nodes[n_id].measured
-                self.nodes[p.uid] = p
-                self.addNodeToEdge(p.uid, e.uid)
+        for i,m in enumerate(match):
+            q = qubit_map[i] #TODO check for error
 
-            # Update current edge to reflect the 1 component
-            edge.weight = edge.weight * node.state.coeff(spq.Ket(1))
-            for n_id in edge.node_uids:
-                if n_id == node.uid:
-                    self.nodes[n_id].state = spq.Ket(1)
+            if (self.getQubitNodeIdInEdge(q,euid) is None):
+                return False
+            else:
+                node = self.nodes[self.getQubitNodeIdInEdge(q,euid)]
+                if (not self.stateEq(node.state,m)):
+                    return False
 
-    # TODO Measure a set of qubits
-    # TODO Revise preconditions for the op methods
-    # TODO Update th rest of the codebase to account for non measured nodes
-    # TODO probably don't allow for any gates on non measured nodes (maybe bitflips?)
-    # TODO we lose the measurement labels when factoring
+        return True
+    
+    def replaceMatch(self,edge,replace,qubit_map):
+        euid = None
+        if (edge is not None):
+            euid = self.edges[edge].uid
+
+        for i,m in enumerate(replace):
+            q = qubit_map[i] #TODO check for error
+
+            if (not self.nodes[self.getQubitNodeIdInEdge(q,euid)].replaced):
+                self.nodes[self.getQubitNodeIdInEdge(q,euid)].state = m
+
+                m = sp.simplify(m)
+                m = sp.expand(m)
+
+                self.nodes[self.getQubitNodeIdInEdge(q,euid)].replaced = True
+
+    #qubit_map=["q0","q1","q2"]
+    def rewrite(self,rules,qubit_map,params_map=[]):
+        #TODO need to refactor this too account for rules and qubit mappings
+        #self._record(qubit, rules['name'])
+
+        #set all replacement tracking t False
+        for n in self.nodes:
+            self.nodes[n].replaced = False
+
+        for rule in rules['rules']:
+            #find matches in edges
+            # TODO if th edge has been touched previously shouldnt match anymore
+            for e in self.edges:
+                if (self.isMatch(rule['match'],e,qubit_map)):
+                    self.replaceMatch(e,rule['replace'],qubit_map)
+            
+            #find matches in system
+            if (self.isMatch(rule['match'],None,qubit_map)):
+                    self.replaceMatch(None,rule['replace'],qubit_map)
+
+###############################################################
+# MEASURE
+###############################################################
+
     def measure(self, qubits):
         # iterate over each hyper edge the qubit is in
         for q in qubits:
@@ -379,162 +404,3 @@ class Hypergraph:
                     self.deleteEdge(node.edge_uid)
 
         return loss
-
-    def expand(self, a, b):
-        #if one of the qubits is not entangled but the other is we need to add the qubit to all corresponding edges before we start with the operation (sort of decompress)
-        #preprocessing NOT tested
-        a_edge_ids = self.getQubitEdgeIds(a)
-        b_edge_ids = self.getQubitEdgeIds(b)
-        
-        if (len(a_edge_ids) == 0 and len(b_edge_ids) != 0):
-            a_node_ids = self.getQubitNodeIds(a)
-            a_node = self.nodes[a_node_ids[0]]
-            for edge_id in b_edge_ids:
-                #create node
-                p = Node(a_node.qubit,a_node.state)
-                #add nodes to hgraph
-                self.nodes[p.uid] = p
-                #add nodes to edge
-                self.addNodeToEdge(p.uid,edge_id)
-            
-            #delete original node
-            #did nt belong t any edge anyway
-            self.deleteNode(a_node.uid)
-        
-        elif (len(b_edge_ids) == 0 and len(a_edge_ids) != 0):
-            b_node_ids = self.getQubitNodeIds(b)
-            b_node = self.nodes[b_node_ids[0]]
-            for edge_id in a_edge_ids:
-                #create node
-                p = Node(b_node.qubit,b_node.state)
-                #add nodes to hgraph
-                self.nodes[p.uid] = p
-                #add nodes to edge
-                self.addNodeToEdge(p.uid,edge_id)
-            
-            #delete original node
-            #did nt belong t any edge anyway
-            self.deleteNode(b_node.uid)
-        
-        #if both entangled but in different edges we need to do some preprocessing as well
-        shared_edges = list(set(a) & set(b))
-
-        #tbh, if edges are not shared they, the intersection must be empty. Any other set-up it's just not a valid state
-        if (len(shared_edges) == 0):
-            self.combineEdges(a_edge_ids,b_edge_ids)
-
-    def factorQubit(self, edge_ids, qubit):
-        for edge_id in edge_ids:
-            node_id = self.getQubitNodeIdInEdge(qubit,edge_id)
-            self.nodes[node_id].edge_uid = None
-            self.edges[edge_id].node_uids.remove(node_id)
-
-            if (len(self.edges[edge_id].node_uids) == 0):
-                self.deleteEdge(edge_id)
-
-    def factorQubits(self, edge_ids, qubits):
-        #If only 1 edge is virtually left we can assume the weight is one and therefore can be ignored
-        for q in qubits:
-            canFactor = True
-            for i,euid in enumerate(edge_ids):
-                if (i > 0):
-                    q1 = self.getQubitNodeIdInEdge(q,edge_ids[i])
-                    q2 = self.getQubitNodeIdInEdge(q,edge_ids[i-1])
-                    if (not self.stateEq(self.nodes[q1].state,self.nodes[q2].state)):
-                        canFactor = False
-                        break
-
-            if (canFactor):
-                self.factorQubit(edge_ids, q)
-
-    # Factor a specific set of entangled qubits
-    # TODO add a verbose mode that explains a bit more what's going on (what's being merged)
-    def simplify(self, qubits, steps=None, verbose=False, factor=True):
-        # preprocessing: we expand all the affected qubits to avoid global phase comparison issues
-        for index, qubit in enumerate(qubits):
-            if index > 0:
-                self.expand(qubits[index - 1], qubits[index])
-
-        #Health check on input
-        measured_qubits = []
-        edge_ids = []
-        for q in qubits:
-            q_edge_ids = self.getQubitEdgeIds(q)
-            if (len(edge_ids) == 0):
-                edge_ids = self.getQubitEdgeIds(q)
-            else:
-                if (set(edge_ids) != set(q_edge_ids)):
-                    print("The given qubits can't be factored")
-                    return None
-
-        # call recursive part
-        result_edge_ids = self.simplifyRec(edge_ids= edge_ids, measured_qubits= measured_qubits, steps= steps)
-        
-        if (factor):
-            self.factorQubits(result_edge_ids,qubits)
-            
-        
-    #
-    # match [1,1,0]
-    # edge {uid = ...}
-    # map ["q0","q1","q2"]
-    def isMatch(self,match,edge,qubit_map):
-        euid = None
-        if (edge is not None):
-            euid = self.edges[edge].uid
-
-        for i,m in enumerate(match):
-            q = qubit_map[i] #TODO check for error
-
-            if (self.getQubitNodeIdInEdge(q,euid) is None):
-                return False
-            else:
-                node = self.nodes[self.getQubitNodeIdInEdge(q,euid)]
-                if (not self.stateEq(node.state,m)):
-                    return False
-
-        return True
-    
-    def replaceMatch(self,edge,replace,qubit_map):
-        euid = None
-        if (edge is not None):
-            euid = self.edges[edge].uid
-
-        for i,m in enumerate(replace):
-            q = qubit_map[i] #TODO check for error
-
-            if (not self.nodes[self.getQubitNodeIdInEdge(q,euid)].replaced):
-                self.nodes[self.getQubitNodeIdInEdge(q,euid)].state = m
-
-                m = sp.simplify(m)
-                m = sp.expand(m)
-
-                self.nodes[self.getQubitNodeIdInEdge(q,euid)].replaced = True
-
-    #qubit_map=["q0","q1","q2"]
-    def rewrite(self,rules,qubit_map,params_map=[]):
-        #TODO need to refactor this too account for rules and qubit mappings
-        #self._record(qubit, rules['name'])
-
-        #set all replacement tracking t False
-        for n in self.nodes:
-            self.nodes[n].replaced = False
-
-        #Expand & split mapped qubits
-        for index, qubit in enumerate(qubit_map):
-            if index > 0:
-                self.expand(qubit_map[index - 1], qubit_map[index])
-        
-        for qubit in qubit_map:
-            self.splitAllEdgesZ(qubit)
-
-        for rule in rules['rules']:
-            #find matches in edges
-            # TODO if th edge has been touched previously shouldnt match anymore
-            for e in self.edges:
-                if (self.isMatch(rule['match'],e,qubit_map)):
-                    self.replaceMatch(e,rule['replace'],qubit_map)
-            
-            #find matches in system
-            if (self.isMatch(rule['match'],None,qubit_map)):
-                    self.replaceMatch(None,rule['replace'],qubit_map)

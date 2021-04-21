@@ -77,6 +77,10 @@ def cytoscapeExport(hypergraph):
 
     print(json.dumps(elements))
 
+# Transforms the full system
+def toStateVector(self):
+    pass
+
 def simplifiedState(hypergraph, state):
     #This can be expensive!
     state = sp.simplify(state)
