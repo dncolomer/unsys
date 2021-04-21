@@ -190,6 +190,18 @@ class Hypergraph:
 
         self.edges.pop(edge_uid)
 
+    def areComposed(self, qubits):
+        eids_base = []
+
+        for i,q in enumerate(qubits):
+            if (i == 0):
+                eids_base = self.getQubitEdgeIds(q)
+            else:
+                if (set(eids_base) != set(self.getQubitEdgeIds(q))):
+                    return False
+
+        return True
+
 ###############################################################
 # MERGE STATES
 ###############################################################
@@ -219,17 +231,35 @@ class Hypergraph:
 # COMPOSE
 ###############################################################
     
-    def composeEdges(base_e, cand_e, qubits):
+    def composeEdges(base_g, cand_g, qubits):
         pass
 
-    def canComposeEdges(base_e, cand_e, qubits):
-        pass
+    def canComposeEdges(base_g, cand_g, qubits):
+        return not bool(set(base_g) & set(cand_g))
+
+    def composeRec(self, edge_groups, qubits):     
+        base_group = []
+        for i,el in enumerate(edge_groups):
+            if (i == 0):
+                base_group = base_group[el]
+            else:
+                if (self.canComposeEdges(base_group[i],base_group[i-1])):
+                    edge_id = self.compose(base_group[i],base_group[i-1])
+                    edge_groups.pop(i)
+                    edge_groups.pop(i-1)
+                    edge_groups.append([edge_id])
+
+                    return self.composeRec(edge_groups, qubits)
+        
+        return edge_groups
+
     
-    def composeRec(eids, qubits):
-        pass
-
-    def composeQubits(self, qubits):
-        pass
+    def composeQubits(qubits):
+        edge_groups = []
+        for q in qubits:
+            edge_groups.append(getQubitEdgeIds(q))
+        
+        return self.composeRec(edge_groups,qubits)
 
 ###############################################################
 # DECOMPOSE
@@ -272,19 +302,15 @@ class Hypergraph:
         
         return eids
 
+    #returns list of new edges
     def decomposeQubits(self, qubits):
-        eids_base = []
-
         # Check if we can decompose
-        for i,q in enumerate(qubits):
-            if (i == 0):
-                eids_base = self.getQubitEdgeIds(q)
-            else:
-                if (set(eids_base) != self.getQubitEdgeIds(q)):
-                    print("The given qubits can't be factored")
-                    return None
+        if (self.areComposed(qubits)):
+            return decomposeRec(eids_base, qubits)
+        else:
+            print("Error: Qubits are not composed.")
         
-        return decomposeRec(eids_base, qubits)
+        return []
 
 ###############################################################
 # REWRITE
@@ -328,23 +354,23 @@ class Hypergraph:
 
     #qubit_map=["q0","q1","q2"]
     def rewrite(self,rules,qubit_map,params_map=[]):
-        #TODO need to refactor this too account for rules and qubit mappings
-        #self._record(qubit, rules['name'])
+        if (self.areComposed(qubit_map)):
+            #set all replacement tracking t False
+            for n in self.nodes:
+                self.nodes[n].replaced = False
 
-        #set all replacement tracking t False
-        for n in self.nodes:
-            self.nodes[n].replaced = False
-
-        for rule in rules['rules']:
-            #find matches in edges
-            # TODO if th edge has been touched previously shouldnt match anymore
-            for e in self.edges:
-                if (self.isMatch(rule['match'],e,qubit_map)):
-                    self.replaceMatch(e,rule['replace'],qubit_map)
-            
-            #find matches in system
-            if (self.isMatch(rule['match'],None,qubit_map)):
-                    self.replaceMatch(None,rule['replace'],qubit_map)
+            for rule in rules['rules']:
+                #find matches in edges
+                # TODO if th edge has been touched previously shouldnt match anymore
+                for e in self.edges:
+                    if (self.isMatch(rule['match'],e,qubit_map)):
+                        self.replaceMatch(e,rule['replace'],qubit_map)
+                
+                #find matches in system
+                if (self.isMatch(rule['match'],None,qubit_map)):
+                        self.replaceMatch(None,rule['replace'],qubit_map)
+        else:
+            print("Can't rewrite. Qubits are not composed")
 
 ###############################################################
 # MEASURE
