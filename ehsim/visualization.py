@@ -12,22 +12,22 @@ plus_ket = np.array([1 / np.sqrt(2), 1 / np.sqrt(2)], dtype=np.complex_)
 minus_ket = np.array([1 / np.sqrt(2), -1 / np.sqrt(2)], dtype=np.complex_)
 
 #TODO This needs to be refactred in order to support rules
-def quirkExport(hypergraph):
+def quirkExport(state_system):
     """
-    Expert a hypergraph simulation to Quirk.
+    Expert a state_system simulation to Quirk.
 
     """
-    if not hypergraph._record_gates:
+    if not state_system._record_gates:
         raise ValueError(
-            "You cannot export a hypergraph to quirk unless `record_gates` was set to True in the Hypergraph constructor."
+            "You cannot export a state_system to quirk unless `record_gates` was set to True in the Hypergraph constructor."
         )
     base_url = "https://algassert.com/quirk#circuit={}"
 
     gates = [
-        [1 for _ in range(len(hypergraph))] for _ in range(len(hypergraph._gate_log))
+        [1 for _ in range(len(state_system))] for _ in range(len(state_system._gate_log))
     ]
 
-    for i, gate in enumerate(hypergraph._gate_log):
+    for i, gate in enumerate(state_system._gate_log):
         for (a, n) in _gate_names:
             if gate["gate"] is a:
                 for q in gate["qubits"]:
@@ -41,24 +41,24 @@ def quirkExport(hypergraph):
 
     return base_url.format(json.dumps({"cols": gates}, ensure_ascii=False))
 
-def cytoscapeExport(hypergraph):
+def cytoscapeExport(state_system):
     elements = {}
     elements["nodes"] = []
     elements["edges"] = []
-    for i in hypergraph.nodes:
+    for i in state_system.nodes:
         # set precision to avoid awkward -zeros
         s = []
-        for state in hypergraph.nodes[i].state:
+        for state in state_system.nodes[i].value:
             s.append(np.around(state, decimals=3))
 
         measured = ""
-        if hypergraph.nodes[i].measured:
+        if state_system.nodes[i].measured:
             measured = "[M]"
 
         lbl = (
-            str(hypergraph.nodes[i].uid)
+            str(state_system.nodes[i].uid)
             + "  ["
-            + str(hypergraph.nodes[i].qubit)
+            + str(state_system.nodes[i].qubit)
             + "]  "
             + str(np.around(s, 3))
             + " "
@@ -68,9 +68,9 @@ def cytoscapeExport(hypergraph):
         nn["data"] = {}
         nn["data"]["id"] = lbl
 
-        if hypergraph.nodes[i].edge_uid is not None:
-            euid = hypergraph.nodes[i].edge_uid
-            l_euid = euid + "  " + str(np.around(hypergraph.edges[euid].weight, 3))
+        if state_system.nodes[i].edge_uid is not None:
+            euid = state_system.nodes[i].edge_uid
+            l_euid = euid + "  " + str(np.around(state_system.edges[euid].weight, 3))
             nn["data"]["parent"] = l_euid
 
         elements["nodes"].append(nn)
@@ -81,56 +81,60 @@ def cytoscapeExport(hypergraph):
 def toStateVector(self):
     pass
 
-def simplifiedState(hypergraph, state):
+def simplifiedState(state_system, state):
     #This can be expensive!
     state = sp.simplify(state)
     state = sp.expand(state)
 
-    if (hypergraph.stateEq(state,spq.Ket(0))):
+    if (state_system.stateEq(state,spq.Ket('0'))):
         return "|0>"
 
-    if (hypergraph.stateEq(state,spq.Ket(1))):
+    if (state_system.stateEq(state,spq.Ket('1'))):
         return "|1>"
 
-    if (hypergraph.stateEq(state,spq.Ket(0)/sp.sqrt(2) + spq.Ket(1)/sp.sqrt(2))):
+    if (state_system.stateEq(state,spq.Ket('0')/sp.sqrt(2) + spq.Ket('1')/sp.sqrt(2))):
         return "|+>"
 
-    if (hypergraph.stateEq(state,spq.Ket(0)/sp.sqrt(2) - spq.Ket(1)/sp.sqrt(2))):
+    if (state_system.stateEq(state,spq.Ket('0')/sp.sqrt(2) - spq.Ket('1')/sp.sqrt(2))):
         return "|->"
     
     state = sp.simplify(state)
     
     return str(state)
 
-def print_raw(hypergraph, simplify=True, subs=[]):
-    print("      ".join(str(ql) for ql in hypergraph.qubitLabels))
-    print("------".join("--" for ql in hypergraph.qubitLabels))  
+def printState(state, simplify=True, subs=[]):
+    #TODO
+    print(state.value)
+
+def printStateSystem(state_system, simplify=True, subs=[]):
+    print("      ".join(str(ql) for ql in state_system.qubitLabels))
+    print("------".join("--" for ql in state_system.qubitLabels))  
     phelper = []
     
-    for e in hypergraph.edges:
+    for e in state_system.edges:
         phelper = []
-        for ql in hypergraph.qubitLabels:
-            nid = hypergraph.getQubitNodeIdInEdge(ql,e)
+        for ql in state_system.qubitLabels:
+            nid = state_system.getQubitNodeIdInEdge(ql,e)
 
             if (nid is not None):
                 replaced = ' '
-                if (hypergraph.nodes[nid].replaced):
+                if (state_system.nodes[nid].replaced):
                     replaced = '*'
 
-                state = hypergraph.nodes[nid].state
+                state = state_system.nodes[nid].value
                 for sub in subs:
                     if (sp.symbols(sub) in state.free_symbols):
                         state = state.subs(sp.symbols(sub),subs[sub])
 
                 if (simplify):
-                    phelper.append(simplifiedState(hypergraph,state))
+                    phelper.append(simplifiedState(state_system,state))
                 else:
                     phelper.append(state)
             else:
                 phelper.append("N/A")
         
         if (len(phelper) != 0):
-            amp = hypergraph.edges[e].weight
+            amp = state_system.edges[e].weight
             for sub in subs:
                 if (sp.symbols(sub) in amp.free_symbols):
                     amp = amp.subs(sp.symbols(sub),subs[sub])
@@ -140,23 +144,23 @@ def print_raw(hypergraph, simplify=True, subs=[]):
         print("     ".join(str(x) for x in phelper))
     
     phelper = []
-    for ql in hypergraph.qubitLabels:
-        nid = hypergraph.getQubitNodeIdInEdge(ql,None)
+    for ql in state_system.qubitLabels:
+        nid = state_system.getQubitNodeIdInEdge(ql,None)
         systemEmpty = True
 
         if (nid is not None):
             systemEmpty = False
             replaced = ' '
-            if (hypergraph.nodes[nid].replaced):
+            if (state_system.nodes[nid].replaced):
                 replaced = '*'
 
-            state = hypergraph.nodes[nid].state
+            state = state_system.nodes[nid].value
             for sub in subs:
                 if (sp.symbols(sub) in state.free_symbols):
                     state = state.subs(sp.symbols(sub),subs[sub])
 
             if (simplify):
-                phelper.append(simplifiedState(hypergraph,state))
+                phelper.append(simplifiedState(state_system,state))
             else:
                 phelper.append(state)
         else:
@@ -168,8 +172,8 @@ def print_raw(hypergraph, simplify=True, subs=[]):
 
         print("     ".join(str(x) for x in phelper))
     
-    print("      ".join("  " for ql in hypergraph.qubitLabels))
-    #print(hypergraph.toStateVector())
-    print("------".join("--" for ql in hypergraph.qubitLabels))
-    print("      ".join("  " for ql in hypergraph.qubitLabels))
-    print("      ".join("  " for ql in hypergraph.qubitLabels))
+    print("      ".join("  " for ql in state_system.qubitLabels))
+    #print(state_system.toStateVector())
+    print("------".join("--" for ql in state_system.qubitLabels))
+    print("      ".join("  " for ql in state_system.qubitLabels))
+    print("      ".join("  " for ql in state_system.qubitLabels))

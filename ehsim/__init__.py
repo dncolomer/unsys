@@ -38,22 +38,38 @@ def getUID(prefix="id"):
     node_nb = node_nb + 1
     return prefix + str(node_nb - 1)
 
-class Node:
-    def __init__(self, qubit, state=None, symbolic=True):
+class State:
+    def __init__(self, qudit, d, initial_value= None, symbolic= True):
         self.uid = getUID("n")
-        self.qubit = qubit
+        self.qudit = qudit
+        self.dimension = d
 
-        self.state = state
-        if (state is None):
-            self.state = spq.Ket(0)
+        #TODO consistency checks with regards to initial value and dimensionality, etc.
+
+        self.value = initial_value
+        if (self.value is None):
+            self.value = spq.Ket('0')
             if (symbolic):
-                self.state = sp.symbols(self.uid+'_0')*spq.Ket(0) + sp.symbols(self.uid+'_1')*spq.Ket(1)
+                sv_size = d
+                i = 0
+                s = None
+                while i < sv_size:
+                    i_base_d = int2base(i,d)
+                    sym = sp.symbols(self.uid+'_'+str(i_base_d))
+                    if (i == 0):
+                        s = sym * spq.Ket(i_base_d)
+                    else:
+                        s += sym * spq.Ket(i_base_d)
+                    
+                    i += 1
+                    
+                self.value = s
 
         self.measured = False
         self.edge_uid = None
         self.replaced = False
 
-class Hyperedge:
+class StateCorrelation:
     def __init__(self, weight, uid=None):
         self.node_uids = []
         if uid is None:
@@ -63,13 +79,14 @@ class Hyperedge:
         self.weight = weight
 
 #sv_expr is in format Ket('012')
-class Hypergraph:
-    def __init__(self, nb_qudits, d= 2, sv_expr= None, symbolic= True, record_gates= True):
+class StateSystem:
+    def __init__(self, nb_qudits, d, sv_expr= None, symbolic= True, record_gates= True):
         global node_nb
 
+        self.dimension = d
         self.nodes = {}
         self.edges = {}
-        self.qubitLabels = []
+        self.quditLabels = []
 
         self._record_gates = record_gates
         self._gate_log = []
@@ -82,25 +99,25 @@ class Hypergraph:
             sv_size = d**nb_qudits
             i = 0
             while i < sv_size:
-                i_base = int2base(i,d)
-                coeff = sv_expr.coeff(i_base)
-                e = Hyperedge(coeff)
+                i_base_d = int2base(i,d)
+                coeff = sv_expr.coeff(i_base_d)
+                e = StateCorrelation(coeff)
 
                 j = 0
                 while j < nb_qudits:
-                    n = Node("q"+str(j))
-                    self.qubitLabels.append("q"+str(j))
+                    n = State("q"+str(j),self.dimension)
+                    self.quditLabels.append("q"+str(j))
 
-                    n.state = coeff*Ket(i_base[j])
+                    n.value = coeff*Ket(i_base_d[j])
                     self.addNodeToEdge(n.uid, e.uid)
                     j += 1
                 
                 i += 1
         else:
             for i in range(0, nb_qudits):
-                self.qubitLabels.append("q" + str(i))
+                self.quditLabels.append("q" + str(i))
 
-                node = Node("q" + str(i), symbolic=symbolic)
+                node = State("q" + str(i), self.dimension, symbolic=symbolic)
                 self.nodes[node.uid] = node
 
 ###############################################################
@@ -108,17 +125,17 @@ class Hypergraph:
 ###############################################################
 
     def stateEq(self, s1, s2):
-        s10_abs = sp.Abs(s1.coeff(spq.Ket(0)))
-        s10_arg = sp.arg(s1.coeff(spq.Ket(0)))
+        s10_abs = sp.Abs(s1.coeff(spq.Ket('0')))
+        s10_arg = sp.arg(s1.coeff(spq.Ket('0')))
 
-        s20_abs = sp.Abs(s2.coeff(spq.Ket(0)))
-        s20_arg = sp.arg(s2.coeff(spq.Ket(0)))
+        s20_abs = sp.Abs(s2.coeff(spq.Ket('0')))
+        s20_arg = sp.arg(s2.coeff(spq.Ket('0')))
 
-        s11_abs = sp.Abs(s1.coeff(spq.Ket(1)))
-        s11_arg = sp.arg(s1.coeff(spq.Ket(1)))
+        s11_abs = sp.Abs(s1.coeff(spq.Ket('1')))
+        s11_arg = sp.arg(s1.coeff(spq.Ket('1')))
 
-        s21_abs = sp.Abs(s2.coeff(spq.Ket(1)))
-        s21_arg = sp.arg(s2.coeff(spq.Ket(1)))
+        s21_abs = sp.Abs(s2.coeff(spq.Ket('1')))
+        s21_arg = sp.arg(s2.coeff(spq.Ket('1')))
 
         s1_relphase =  sp.Abs(s11_arg - s10_arg)
         s2_relphase =  sp.Abs(s21_arg - s20_arg)
@@ -154,14 +171,14 @@ class Hypergraph:
     def getQubitNodeIds(self, qubit):
         uids = []
         for n in self.nodes:
-            if self.nodes[n].qubit == qubit:
+            if self.nodes[n].qudit == qubit:
                 uids.append(self.nodes[n].uid)
 
         return uids
 
     def getQubitNodeIdInEdge(self, qubit, edge_uid):
         for n in self.nodes:
-            if self.nodes[n].qubit == qubit:
+            if self.nodes[n].qudit == qubit:
                 if (self.nodes[n].edge_uid is None and edge_uid is None) or (
                     self.nodes[n].edge_uid == edge_uid
                 ):
@@ -172,7 +189,7 @@ class Hypergraph:
     def getQubitNodeId(self, qubit, edge):
         uids = []
         for n in self.edges[edge].node_uids:
-            if self.nodes[n].qubit == qubit:
+            if self.nodes[n].qudit == qubit:
                 return self.nodes[n].uid
 
         return None
@@ -182,7 +199,7 @@ class Hypergraph:
         for e in self.edges:
             node_uids = self.edges[e].node_uids
             for node_uid in node_uids:
-                if self.nodes[node_uid].qubit == qubit:
+                if self.nodes[node_uid].qudit == qubit:
                     uids.append(e)
 
         return uids
@@ -219,13 +236,13 @@ class Hypergraph:
         self.edges.pop(edge_uid)
 
     def copyEdge(self, edge_uid):
-        copy_e = Hyperedge(self.edges[edge_id].weight)
+        copy_e = StateCorrelation(self.edges[edge_id].weight)
         self.edges[copy_e.uid] = copy_e
 
         for n in self.edges[edge_uid]:
             node = self.nodes[n]
-            new_n = Node(node.qubit)
-            new_n.state = node.state
+            new_n = State(node.qudit,self.dimension)
+            new_n.value = node.value
 
             self.addNodeToEdge(new_n.uid, copy_e.uid)
 
@@ -260,8 +277,8 @@ class Hypergraph:
 ###############################################################
 
     def mergeQubitState(self, qubit):
-        new_e = Hyperedge(1)
-        new_n = Node(qubit)
+        new_e = StateCorrelation(1)
+        new_n = State(qubit,self.dimension)
         e_delete = []
         for i,eid in enumerate(self.getQubitEdgeIds(qubit)):
             if (len(self.edges[eid].node_uids) != 1):
@@ -272,9 +289,9 @@ class Hypergraph:
                 n = self.nodes[self.getQubitNodeIdInEdge(eid)]
 
                 if (i == 0):
-                    new_n.state = n.state * w
+                    new_n.value = n.value * w
                 else:
-                    new_n.state = new_n.state + (n.state * w)
+                    new_n.value = new_n.value + (n.value * w)
                 
                 e_delete.append(eid)
         
@@ -299,12 +316,12 @@ class Hypergraph:
         edge_ids = self.getQubitEdgeIds(qubit)
         for eid in edge_ids:
             node = self.getQubitNodeIdInEdge(qubit,eid)
-            if (not self.stateEq(sqp.Ket(0),node.state) and not self.stateEq(sqp.Ket(1),node.state)):
+            if (not self.stateEq(sqp.Ket('0'),node.value) and not self.stateEq(sqp.Ket('1'),node.value)):
                 eid_copy = self.copyEdge(eid)
-                coeff_0 = self.nodes[self.edges[eid]].state.coeff(spq.Ket(0))
-                coeff_1 = self.nodes[self.edges[eid]].state.coeff(spq.Ket(1))
-                self.nodes[self.edges[eid]].state = spq.Ket(0)
-                self.nodes[self.edges[eid_copy]].state = spq.Ket(1)
+                coeff_0 = self.nodes[self.edges[eid]].value.coeff(spq.Ket('0'))
+                coeff_1 = self.nodes[self.edges[eid]].value.coeff(spq.Ket('1'))
+                self.nodes[self.edges[eid]].value = spq.Ket('0')
+                self.nodes[self.edges[eid_copy]].value = spq.Ket('1')
 
                 self.edges[eid].weight *= coeff_0
                 self.edges[eid_copy].weight *= coeff_1 
@@ -323,7 +340,7 @@ class Hypergraph:
             base_n = self.getQubitNodeIdInEdge(q,base_e)
             cand_n = self.getQubitNodeIdInEdge(q,cand_e)
 
-            if (not self.stateEq(self.nodes[base_n].state, self.nodes[cand_e].state)):
+            if (not self.stateEq(self.nodes[base_n].value, self.nodes[cand_e].value)):
                 return False
 
         return True
@@ -404,7 +421,7 @@ class Hypergraph:
 ###############################################################
 
     def decomposeEdges(base_e, cand_e, qubits):
-        new_e = Hyperedge(1)
+        new_e = StateCorrelation(1)
         for q in qubits:
             base_n = self.getQubitNodeIdInEdge(q,base_e)
             cand_n = self.getQubitNodeIdInEdge(q,cand_e)
@@ -418,7 +435,7 @@ class Hypergraph:
             base_n = self.getQubitNodeIdInEdge(q,base_e)
             cand_n = self.getQubitNodeIdInEdge(q,cand_e)
 
-            if (not self.stateEq(self.nodes[base_n].state, self.nodes[cand_e].state)):
+            if (not self.stateEq(self.nodes[base_n].value, self.nodes[cand_e].value)):
                 return False
 
         return True
@@ -470,7 +487,7 @@ class Hypergraph:
                 return False
             else:
                 node = self.nodes[self.getQubitNodeIdInEdge(q,euid)]
-                if (not self.stateEq(node.state,m)):
+                if (not self.stateEq(node.value,m)):
                     return False
 
         return True
@@ -484,7 +501,7 @@ class Hypergraph:
             q = qubit_map[i]
 
             if (not self.nodes[self.getQubitNodeIdInEdge(q,euid)].replaced):
-                self.nodes[self.getQubitNodeIdInEdge(q,euid)].state = m
+                self.nodes[self.getQubitNodeIdInEdge(q,euid)].value = m
 
                 m = sp.simplify(m)
                 m = sp.expand(m)
@@ -522,31 +539,31 @@ class Hypergraph:
                 # if the qubit is in the comp. basis then we just flag it as measured = True
                 # remve any global phase
                 # Note: Quirk keeps track of the phase so that a statevector (assuming measurement deferred can still be shown)
-                # self.nodes[node.uid].state = self.correctPhase(node.state)
+                # self.nodes[node.uid].value = self.correctPhase(node.value)
                 node = self.nodes[self.getQubitNodeIdInEdge(q, None)]
                 self.nodes[node.uid].measured = True
-                if not self.stateEq(node.state, spq.Ket(1)) and not self.stateEq(
-                    node.state, spq.Ket(0)
+                if not self.stateEq(node.value, spq.Ket('1')) and not self.stateEq(
+                    node.value, spq.Ket('0')
                 ):
                     # if the qubit is not then we need to split the edge into 2.
                     # One where the node will be in the 0 state + measured = True
                     # One where the node will be in the 1 state + measured = True
-                    self.splitEdgeZ(None, node.qubit)
+                    self.splitEdgeZ(None, node.qudit)
             else:
                 for e_id in edge_ids:
                     # if the qubit is in the comp. basis then we just flag it as measured = False
                     # remve any global phase
                     # Note: Quirk keeps track of the phase so that a statevector (assuming measurement deferred can still be shown)
-                    # self.nodes[node.uid].state = self.correctPhase(node.state)
+                    # self.nodes[node.uid].value = self.correctPhase(node.value)
                     node = self.nodes[self.getQubitNodeIdInEdge(q, e_id)]
                     self.nodes[node.uid].measured = True
-                    if not self.stateEq(node.state, spq.Ket(1)) and not self.stateEq(
-                        node.state, spq.Ket(0)
+                    if not self.stateEq(node.value, spq.Ket('1')) and not self.stateEq(
+                        node.value, spq.Ket('0')
                     ):
                         # if the qubit is not then we need to split the edge into 2.
                         # One where the node will be in the 0 state + measured = True
                         # One where the node will be in the 1 state + measured = True
-                        self.splitEdgeZ(e_id, node.qubit)
+                        self.splitEdgeZ(e_id, node.qudit)
 
         return
 
@@ -558,7 +575,7 @@ class Hypergraph:
             nodeIds = self.getQubitNodeIds(qubit)
             for nodeId in nodeIds:
                 node = self.nodes[nodeId]
-                if (not self.stateEq(node.state, state)):
+                if (not self.stateEq(node.value, state)):
                     if (node.edge_uid is not None):
                         edge = self.edges[node.edge_uid]
                         '''loss = loss + (
