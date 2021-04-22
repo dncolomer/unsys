@@ -190,6 +190,10 @@ class Hypergraph:
 
         self.edges.pop(edge_uid)
 
+    def copyEdge(self, edge_uid):
+        #TODO
+        pass
+
     def areComposed(self, qubits):
         eids_base = []
 
@@ -206,33 +210,81 @@ class Hypergraph:
 # MERGE STATES
 ###############################################################
 
+    def mergeQubitState(self, qubit):
+        new_e = Hyperedge(1)
+        new_n = Node(qubit)
+        e_delete = []
+        for i,eid in enumerate(self.getQubitEdgeIds(qubit)):
+            if (len(self.edges[eid].node_uids) != 1):
+                print("Can't simplify qubit "+qubit)
+                return None
+            else:
+                w = self.edges[eid].weight
+                n = self.nodes[self.getQubitNodeIdInEdge(eid)]
+
+                if (i == 0):
+                    new_n.state = n.state * w
+                else:
+                    new_n.state = new_n.state + (n.state * w)
+                
+                e_delete.append(eid)
+        
+        for eid in e_delete:
+            self.deleteEdge(eid)
+
+        self.addNodeToEdge(new_n.uid,new_e.uid)
+
+        return new_e.uid  
+
     #This is where we merge single system states into one edge superposing the comp. basis 
-    def mergeStates(self, qubits):
-        pass
+    def mergeQubitStates(self, qubits):
+        for q in qubits:
+            self.mergeQubitState(q)
 
 ###############################################################
 # SPLIT STATES
 ###############################################################
 
     #This is where we split single system states into one edge per computational base 
-    def splitStates(self, qubits):
-        pass
+    def splitQubitState(self, qubit):
+        edge_ids = self.getQubitEdgeIds(qubit)
+        for eid in edge_ids:
+            node = self.getQubitNodeIdInEdge(qubit,eid)
+            if (not self.stateEq(sqp.Ket(0),node.state) and not self.stateEq(sqp.Ket(1),node.state)):
+                eid_copy = self.copyEdge(eid)
+                self.nodes[self.edges[eid]].state = spq.Ket(0) #TODO
+                self.nodes[self.edges[eid_copy]].state = spq.Ket(1) #TODO
+
+    #This is where we split single system states into one edge per computational base 
+    def splitQubitsStates(self, qubits):
+        for q in qubits:
+            self.splitQubitState(q)
 
 ###############################################################
 # SIMPLIFY
-###############################################################
+###############################################################    
 
     #This is to apply interference effects
     #Can only be done if all qubits can be composed
     def simplifyQubits(self, qubits):
-        pass
+        if (self.areComposed(qubits)):
+            #TODO
+            pass
+        else:
+            print("Can't simplify because the qubits are not composed")
 
 ###############################################################
 # COMPOSE
 ###############################################################
     
-    def composeEdges(base_g, cand_g, qubits):
-        pass
+    def composeEdges(src_g, target_g, qubits):
+        for src_e in src_g:
+            for target_e in target_g:
+                for node_id in self.edges[src_e].node_uids:
+                    self.moveNodeToEdge(node_id,src_e,target_e)
+
+            self.edges[target_e].weight = self.edges[target_e].weight * self.edges[src_e].weight  
+            self.deleteEdge(src_e)
 
     def canComposeEdges(base_g, cand_g, qubits):
         return not bool(set(base_g) & set(cand_g))
@@ -252,7 +304,6 @@ class Hypergraph:
                     return self.composeRec(edge_groups, qubits)
         
         return edge_groups
-
     
     def composeQubits(qubits):
         edge_groups = []
