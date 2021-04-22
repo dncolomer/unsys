@@ -3,9 +3,34 @@ from itertools import combinations
 import numpy as np
 import sympy as sp
 import sympy.physics.quantum as spq
+import string
 
 # global variables
 node_nb = 0
+
+digs = string.digits + string.ascii_letters
+
+def int2base(x, base):
+    if x < 0:
+        sign = -1
+    elif x == 0:
+        return digs[0]
+    else:
+        sign = 1
+
+    x *= sign
+    digits = []
+
+    while x:
+        digits.append(digs[int(x % base)])
+        x = int(x / base)
+
+    if sign < 0:
+        digits.append('-')
+
+    digits.reverse()
+
+    return ''.join(digits)
 
 def getUID(prefix="id"):
     global node_nb
@@ -37,39 +62,42 @@ class Hyperedge:
             self.uid = uid
         self.weight = weight
 
+#sv_expr is in format Ket('012')
 class Hypergraph:
-    # TODO add support for register level operation in a later version
-    def __init__(self, nb_qubits: int, sv: list = None, record_gates: bool = True, symbolic: bool = True):
-        """
-        Create a new Hypergraph simulator.
-
-        Arguments:
-            nb_qubits (int): The number of qubits to simulate
-            sv (list): A list of state vectors to initialize with
-            record_gates (bool: True): Whether to keep a log of gates as they
-                are applied. This incurs a slight performance penalty but
-                enables some useful tools like visualization.
-
-        """
+    def __init__(self, nb_qudits, d= 2, sv_expr= None, symbolic= True, record_gates= True):
         global node_nb
 
         self.nodes = {}
         self.edges = {}
         self.qubitLabels = []
 
-        sv = sv or []
-
         self._record_gates = record_gates
         self._gate_log = []
-        self._num_qubits = nb_qubits
+        self.nb_qudits = nb_qudits
 
+        #TODO better system for unique IDs
         node_nb = 0
 
-        if len(sv) > 0:
-            #TODO
-            pass
+        if sv_expr is not None:
+            sv_size = d**nb_qudits
+            i = 0
+            while i < sv_size:
+                i_base = int2base(i,d)
+                coeff = sv_expr.coeff(i_base)
+                e = Hyperedge(coeff)
+
+                j = 0
+                while j < nb_qudits:
+                    n = Node("q"+str(j))
+                    self.qubitLabels.append("q"+str(j))
+
+                    n.state = coeff*Ket(i_base[j])
+                    self.addNodeToEdge(n.uid, e.uid)
+                    j += 1
+                
+                i += 1
         else:
-            for i in range(0, nb_qubits):
+            for i in range(0, nb_qudits):
                 self.qubitLabels.append("q" + str(i))
 
                 node = Node("q" + str(i), symbolic=symbolic)
@@ -191,8 +219,29 @@ class Hypergraph:
         self.edges.pop(edge_uid)
 
     def copyEdge(self, edge_uid):
-        #TODO
+        copy_e = Hyperedge(self.edges[edge_id].weight)
+        self.edges[copy_e.uid] = copy_e
+
+        for n in self.edges[edge_uid]:
+            node = self.nodes[n]
+            new_n = Node(node.qubit)
+            new_n.state = node.state
+
+            self.addNodeToEdge(new_n.uid, copy_e.uid)
+
         pass
+
+    def composedEdges(self, qubits):
+        eids_base = []
+
+        for i,q in enumerate(qubits):
+            if (i == 0):
+                eids_base = self.getQubitEdgeIds(q)
+            else:
+                if (set(eids_base) != set(self.getQubitEdgeIds(q))):
+                    return None
+
+        return eids_base
 
     def areComposed(self, qubits):
         eids_base = []
@@ -252,8 +301,13 @@ class Hypergraph:
             node = self.getQubitNodeIdInEdge(qubit,eid)
             if (not self.stateEq(sqp.Ket(0),node.state) and not self.stateEq(sqp.Ket(1),node.state)):
                 eid_copy = self.copyEdge(eid)
-                self.nodes[self.edges[eid]].state = spq.Ket(0) #TODO
-                self.nodes[self.edges[eid_copy]].state = spq.Ket(1) #TODO
+                coeff_0 = self.nodes[self.edges[eid]].state.coeff(spq.Ket(0))
+                coeff_1 = self.nodes[self.edges[eid]].state.coeff(spq.Ket(1))
+                self.nodes[self.edges[eid]].state = spq.Ket(0)
+                self.nodes[self.edges[eid_copy]].state = spq.Ket(1)
+
+                self.edges[eid].weight *= coeff_0
+                self.edges[eid_copy].weight *= coeff_1 
 
     #This is where we split single system states into one edge per computational base 
     def splitQubitsStates(self, qubits):
@@ -264,14 +318,47 @@ class Hypergraph:
 # SIMPLIFY
 ###############################################################    
 
-    #This is to apply interference effects
-    #Can only be done if all qubits can be composed
+    def canSimplifyEdges(base_e, cand_e, qubits):
+        for q in qubits:
+            base_n = self.getQubitNodeIdInEdge(q,base_e)
+            cand_n = self.getQubitNodeIdInEdge(q,cand_e)
+
+            if (not self.stateEq(self.nodes[base_n].state, self.nodes[cand_e].state)):
+                return False
+
+        return True
+
+    def simplifyEdges(base_e, cand_e, qubits):
+        self.edges[base_e].weight = self.edges[base_e].weight + self.edges[cand_e].weight  
+        self.deleteEdge(cand_e)
+
+    def simplifyRec(eids, qubits):
+        if (len(eids)) <= 1:
+            return eids
+
+        for i, base_e in enumerate(eids):
+            for j, cand_e in enumerate(eids):
+                if (i != j and self.canSimplifyEdges(base_e, cand_e, qubits)):
+                    self.simplifyEdges(base_e, cand_e, qubits)
+                    
+                    #Update the list of edge ids
+                    eids.remove(cand_e)
+
+                    return self.simplifyRec(eids, qubits)
+        
+        return eids
+
+    #returns list of new edges
     def simplifyQubits(self, qubits):
+        # Check if we can decompose
         if (self.areComposed(qubits)):
-            #TODO
-            pass
+            eids_base = self.composedEdges(qubits)
+            return simplifyRec(eids_base, qubits)
         else:
-            print("Can't simplify because the qubits are not composed")
+            print("Error: Qubits are not composed.")
+        
+        return []
+
 
 ###############################################################
 # COMPOSE
@@ -357,6 +444,7 @@ class Hypergraph:
     def decomposeQubits(self, qubits):
         # Check if we can decompose
         if (self.areComposed(qubits)):
+            eids_base = self.composedEdges(qubits)
             return decomposeRec(eids_base, qubits)
         else:
             print("Error: Qubits are not composed.")
@@ -376,7 +464,7 @@ class Hypergraph:
             euid = self.edges[edge].uid
 
         for i,m in enumerate(match):
-            q = qubit_map[i] #TODO check for error
+            q = qubit_map[i]
 
             if (self.getQubitNodeIdInEdge(q,euid) is None):
                 return False
@@ -393,7 +481,7 @@ class Hypergraph:
             euid = self.edges[edge].uid
 
         for i,m in enumerate(replace):
-            q = qubit_map[i] #TODO check for error
+            q = qubit_map[i]
 
             if (not self.nodes[self.getQubitNodeIdInEdge(q,euid)].replaced):
                 self.nodes[self.getQubitNodeIdInEdge(q,euid)].state = m
@@ -412,7 +500,6 @@ class Hypergraph:
 
             for rule in rules['rules']:
                 #find matches in edges
-                # TODO if th edge has been touched previously shouldnt match anymore
                 for e in self.edges:
                     if (self.isMatch(rule['match'],e,qubit_map)):
                         self.replaceMatch(e,rule['replace'],qubit_map)
