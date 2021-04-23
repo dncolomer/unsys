@@ -105,35 +105,6 @@ def printStateSystem(state_system, simplify=True, subs=[]):
 
         print("     ".join(str(x) for x in phelper))
     
-    phelper = []
-    for ql in state_system.quditLabels:
-        nid = state_system.getQubitStatesInCorrelation(ql,None)
-        systemEmpty = True
-
-        if (nid is not None):
-            systemEmpty = False
-            replaced = ' '
-            if (state_system.states[nid].replaced):
-                replaced = '*'
-
-            state = state_system.states[nid].value
-            for sub in subs:
-                if (sp.symbols(sub) in state.free_symbols):
-                    state = state.subs(sp.symbols(sub),subs[sub])
-
-            if (simplify):
-                phelper.append(simplifiedState(state_system,state))
-            else:
-                phelper.append(state)
-        else:
-            phelper.append("N/A")
-
-    if (not systemEmpty):
-        if (len(phelper) != 0):
-                phelper.append("Not Entangled")
-
-        print("     ".join(str(x) for x in phelper))
-    
     print("      ".join("  " for ql in state_system.quditLabels))
     #print(state_system.toStateVector())
     print("------".join("--" for ql in state_system.quditLabels))

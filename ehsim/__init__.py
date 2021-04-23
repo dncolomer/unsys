@@ -90,30 +90,34 @@ class StateSystem:
 
         state_nb = 0
 
+        for i in range(0, nb_qudits):
+            self.quditLabels.append("q" + str(i))
+
         if sv_expr is not None:
-            sv_size = d**nb_qudits
-            i = 0
-            while i < sv_size:
-                i_base_d = int2base(i,d)
-                coeff = sv_expr.coeff(i_base_d)
-                e = StateCorrelation(coeff)
+            #TODO check for consistency with d
+            syms = list(sv_expr.free_symbols)
+            for sym in syms:
+                if (hasattr(sym, 'label')):
+                    lbl = str(sym.label[0])
+                    coeff = sv_expr.coeff(sym)
 
-                j = 0
-                while j < nb_qudits:
-                    n = State("q"+str(j),self.dimension)
-                    self.quditLabels.append("q"+str(j))
+                    sc = StateCorrelation(coeff)
+                    self.correlations[sc.uid] = sc
 
-                    n.value = coeff*Ket(i_base_d[j])
-                    self.correlateState(n.uid, e.uid)
-                    j += 1
-                
-                i += 1
+                    j = 0
+                    while j < nb_qudits:
+                        state = State("q"+str(j),self.dimension,symbolic=symbolic)
+
+                        self.states[state.uid] = state
+
+                        state.value = spq.Ket(lbl[j])
+                        self.correlateState(state.uid, sc.uid)
+                        j += 1
         else:
             sc = StateCorrelation(1)
-            for i in range(0, nb_qudits):
-                self.correlations[sc.uid] = sc
+            self.correlations[sc.uid] = sc
 
-                self.quditLabels.append("q" + str(i))
+            for i in range(0, nb_qudits):
                 state = State("q" + str(i), self.dimension, symbolic=symbolic)
                 self.states[state.uid] = state
 
