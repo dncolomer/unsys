@@ -127,23 +127,42 @@ class StateSystem:
 # UTILS
 ###############################################################
 
+    #Assumption syngle qudit states
+    #TODO should we have states and not expressions as input?
     def stateEq(self, s1, s2):
-        s10_abs = sp.Abs(s1.coeff(spq.Ket('0')))
-        s10_arg = sp.arg(s1.coeff(spq.Ket('0')))
+        syms1 = list(s1.free_symbols)
+        kets1 = []
+        for sym in syms1:
+            if (hasattr(sym, 'label')):
+                kets1.append(sym)
 
-        s20_abs = sp.Abs(s2.coeff(spq.Ket('0')))
-        s20_arg = sp.arg(s2.coeff(spq.Ket('0')))
+        syms2 = list(s2.free_symbols)
+        kets2 = []
+        for sym in syms2:
+            if (hasattr(sym, 'label')):
+                kets2.append(sym)
+        
+        if (set(kets1) != set(kets2)):
+            return False
+        
+        ref1_arg = sp.arg(s1.coeff(kets1[0]))
+        ref2_arg = sp.arg(s2.coeff(kets1[0]))
+        for ket in kets1:
+            s1_abs = sp.Abs(s1.coeff(ket))
+            s1_arg = sp.arg(s1.coeff(ket))
 
-        s11_abs = sp.Abs(s1.coeff(spq.Ket('1')))
-        s11_arg = sp.arg(s1.coeff(spq.Ket('1')))
+            s2_abs = sp.Abs(s2.coeff(ket))
+            s2_arg = sp.arg(s2.coeff(ket))
 
-        s21_abs = sp.Abs(s2.coeff(spq.Ket('1')))
-        s21_arg = sp.arg(s2.coeff(spq.Ket('1')))
+            s1_relphase = s2_relphase = 0
+            if (ket != kets1[0]):
+                s1_relphase =  sp.Abs(ref1_arg - s1_arg)
+                s2_relphase =  sp.Abs(ref2_arg - s2_arg)
 
-        s1_relphase =  sp.Abs(s11_arg - s10_arg)
-        s2_relphase =  sp.Abs(s21_arg - s20_arg)
-
-        return s1_relphase == s2_relphase and s10_abs == s20_abs and s11_abs == s21_abs
+            if (s1_relphase != s2_relphase or s1_abs != s2_abs):
+                return False
+        
+        return True
 
     def getQubitStates(self, qubit):
         uids = []
