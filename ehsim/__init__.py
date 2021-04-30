@@ -10,28 +10,6 @@ state_nb = 0
 
 digs = string.digits + string.ascii_letters
 
-def int2base(x, base):
-    if x < 0:
-        sign = -1
-    elif x == 0:
-        return digs[0]
-    else:
-        sign = 1
-
-    x *= sign
-    digits = []
-
-    while x:
-        digits.append(digs[int(x % base)])
-        x = int(x / base)
-
-    if sign < 0:
-        digits.append('-')
-
-    digits.reverse()
-
-    return ''.join(digits)
-
 def getUID(prefix="id"):
     global state_nb
 
@@ -39,7 +17,7 @@ def getUID(prefix="id"):
     return prefix + str(state_nb - 1)
 
 class State:
-    def __init__(self, qudit, d, initial_value= None, symbolic= True):
+    def __init__(self, qudit, d, initial_value= None, symbolic= False):
         self.uid = getUID("s")
         self.qudit = qudit
         self.dimension = d
@@ -53,12 +31,11 @@ class State:
                 i = 0
                 s = None
                 while i < sv_size:
-                    i_base_d = int2base(i,d)
-                    sym = sp.symbols(self.uid+'_'+str(i_base_d))
+                    sym = sp.symbols(self.uid+'_'+str(i))
                     if (i == 0):
-                        s = sym * spq.Ket(i_base_d)
+                        s = sym * spq.Ket(i)
                     else:
-                        s += sym * spq.Ket(i_base_d)
+                        s += sym * spq.Ket(i)
                     
                     i += 1
                     
@@ -75,9 +52,12 @@ class StateCorrelation:
 
         self.weight = weight
 
-#sv_expr is in format Ket('012')
+# sv_expr is in format Ket('0,1,2') |0,1,2>
+# The comma separated format is needed for higher dimensions to be still
+# readable and interpreted as integers
+# TODO support things like |0,1,-2>, etc.
 class StateSystem:
-    def __init__(self, nb_qudits, d, sv_expr= None, symbolic= True):
+    def __init__(self, nb_qudits, d, sv_expr= None, symbolic= False):
         global state_nb
 
         self.dimension = d
@@ -99,20 +79,25 @@ class StateSystem:
             for sym in syms:
                 if (hasattr(sym, 'label')):
                     lbl = str(sym.label[0])
-                    coeff = sv_expr.coeff(sym)
+                    qubitlbls = lbl.split(',')
+                    if (len(qubitlbls) == nb_qudits):
+                        coeff = sv_expr.coeff(sym)
 
-                    sc = StateCorrelation(coeff)
-                    self.correlations[sc.uid] = sc
+                        sc = StateCorrelation(coeff)
+                        self.correlations[sc.uid] = sc
 
-                    j = 0
-                    while j < nb_qudits:
-                        state = State("q"+str(j),self.dimension,symbolic=symbolic)
+                        j = 0
+                        while j < nb_qudits:
+                            state = State("q"+str(j),self.dimension,symbolic=symbolic)
+                            state.value = spq.Ket(qubitlbls[j])
 
-                        self.states[state.uid] = state
+                            self.states[state.uid] = state
 
-                        state.value = spq.Ket(lbl[j])
-                        self.correlateState(state.uid, sc.uid)
-                        j += 1
+                            self.correlateState(state.uid, sc.uid)
+                            j += 1
+                    else:
+                        print("The provided wavefunction is inconsistent with the system's number of qudits.")
+                        print("The affected Kets in the wavefunction have been ignored.")
         else:
             sc = StateCorrelation(1)
             self.correlations[sc.uid] = sc
@@ -266,11 +251,13 @@ class StateSystem:
 
     def mergeQubitState(self, qubit):
         new_e = StateCorrelation(1)
+        self.correlations[new_e.uid] = new_e
+
         new_n = State(qubit,self.dimension)
         e_delete = []
         for i,eid in enumerate(self.getQubitCorrelations(qubit)):
             if (len(self.correlations[eid].state_uids) != 1):
-                print("Can't simplify qubit "+qubit)
+                print("Can't merge qubit "+qubit)
                 return None
             else:
                 w = self.correlations[eid].weight
@@ -323,21 +310,21 @@ class StateSystem:
 # SIMPLIFY
 ###############################################################    
 
-    def canSimplifyCorrelations(base_e, cand_e, qubits):
+    def canSimplifyCorrelations(self, base_e, cand_e, qubits):
         for q in qubits:
             base_n = self.getQubitStatesInCorrelation(q,base_e)
             cand_n = self.getQubitStatesInCorrelation(q,cand_e)
 
-            if (not self.stateEq(self.states[base_n].value, self.states[cand_e].value)):
+            if (not self.stateEq(self.states[base_n].value, self.states[cand_n].value)):
                 return False
 
         return True
 
-    def simplifyCorrelations(base_e, cand_e, qubits):
+    def simplifyCorrelations(self, base_e, cand_e, qubits):
         self.correlations[base_e].weight = self.correlations[base_e].weight + self.correlations[cand_e].weight  
         self.deleteCorrelation(cand_e)
 
-    def simplifyRec(eids, qubits):
+    def simplifyRec(self, eids, qubits):
         if (len(eids)) <= 1:
             return eids
 
@@ -358,7 +345,7 @@ class StateSystem:
         # Check if we can decompose
         if (self.areComposed(qubits)):
             eids_base = self.composedCorrelations(qubits)
-            return simplifyRec(eids_base, qubits)
+            return self.simplifyRec(eids_base, qubits)
         else:
             print("Error: Qubits are not composed.")
         
@@ -369,7 +356,7 @@ class StateSystem:
 # COMPOSE
 ###############################################################
     
-    def composeCorrelations(src_g, target_g, qubits):
+    def composeCorrelations(self, src_g, target_g, qubits):
         for src_e in src_g:
             for target_e in target_g:
                 for state_id in self.correlations[src_e].state_uids:
@@ -378,17 +365,18 @@ class StateSystem:
             self.correlations[target_e].weight = self.correlations[target_e].weight * self.correlations[src_e].weight  
             self.deleteCorrelation(src_e)
 
-    def canComposeCorrelations(base_g, cand_g, qubits):
+    def canComposeCorrelations(self, base_g, cand_g, qubits):
         return not bool(set(base_g) & set(cand_g))
 
-    def composeRec(self, correlation_groups, qubits):     
+    def composeRec(self, correlation_groups, qubits): 
+        print(correlation_groups)    
         base_group = []
         for i,el in enumerate(correlation_groups):
             if (i == 0):
-                base_group = base_group[el]
+                base_group = el
             else:
-                if (self.canComposeCorrelations(base_group[i],base_group[i-1])):
-                    correlation_id = self.compose(base_group[i],base_group[i-1])
+                if (self.canComposeCorrelations(base_group[i], base_group[i-1], qubits)):
+                    correlation_id = self.compose(base_group[i], base_group[i-1], qubits)
                     correlation_groups.pop(i)
                     correlation_groups.pop(i-1)
                     correlation_groups.append([correlation_id])
@@ -397,10 +385,10 @@ class StateSystem:
         
         return correlation_groups
     
-    def composeQubitCorrelations(qubits):
+    def composeQubitCorrelations(self, qubits):
         correlation_groups = []
         for q in qubits:
-            correlation_groups.append(getQubitCorrelations(q))
+            correlation_groups.append(self.getQubitCorrelations(q))
         
         return self.composeRec(correlation_groups,qubits)
 
@@ -408,27 +396,29 @@ class StateSystem:
 # DECOMPOSE
 ###############################################################
 
-    def decomposeCorrelations(base_e, cand_e, qubits):
+    def decomposeCorrelations(self, base_e, cand_e, qubits):
         new_e = StateCorrelation(1)
+        self.correlations[new_e.uid] = new_e
+
         for q in qubits:
             base_n = self.getQubitStatesInCorrelation(q,base_e)
             cand_n = self.getQubitStatesInCorrelation(q,cand_e)
 
-            self.moveCorrelation(base_n,base_e,new_e)
+            self.moveCorrelation(base_n,base_e,new_e.uid)
             self.deleteState(cand_n)
             
 
-    def canDecomposeCorrelations(base_e, cand_e, qubits):
+    def canDecomposeCorrelations(self, base_e, cand_e, qubits):
         for q in qubits:
             base_n = self.getQubitStatesInCorrelation(q,base_e)
             cand_n = self.getQubitStatesInCorrelation(q,cand_e)
 
-            if (not self.stateEq(self.states[base_n].value, self.states[cand_e].value)):
+            if (not self.stateEq(self.states[base_n].value, self.states[cand_n].value)):
                 return False
 
         return True
 
-    def decomposeRec(eids, qubits):
+    def decomposeRec(self, eids, qubits):
         if (len(eids)) <= 1:
             return eids
 
@@ -450,7 +440,7 @@ class StateSystem:
         # Check if we can decompose
         if (self.areComposed(qubits)):
             eids_base = self.composedCorrelations(qubits)
-            return decomposeRec(eids_base, qubits)
+            return self.decomposeRec(eids_base, qubits)
         else:
             print("Error: Qubits are not composed.")
         
