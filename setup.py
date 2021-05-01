@@ -18,11 +18,11 @@ with io.open(os.path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = "\n" + f.read()
 
 setup(
-    name="_intent",
+    name="unsys",
     version=VERSION,
     author="Daniel Colomer",
     author_email="uncertainsystems@gmail.com",
-    description=("Interference & Entanglement Toolkit"),
+    description=("Uncertain Sytsems Toolkit"),
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="MIT",
