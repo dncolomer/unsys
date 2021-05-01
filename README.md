@@ -1,4 +1,4 @@
-# unsys toolkit by Uncertain Systems
+# unsys toolkit
 An Interference & Entanglement Exploration Toolkit
 
 # Installation
