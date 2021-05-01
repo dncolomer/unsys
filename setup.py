@@ -33,7 +33,6 @@ setup(
     install_requires=[
         "numpy==1.20.1",
         "sympy==1.7.1"
-        "pandas==1.2.3",
     ],
     include_package_data=True,
 )
