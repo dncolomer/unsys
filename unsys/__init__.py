@@ -45,19 +45,29 @@ class State:
         self.correlation_uid = None
         self.replaced = False
 
-    def isSuperposed():
-        nbKets = self.getKets()
+    def isSuperposed(self):
+        kets = self.getKets()
 
         if (len(kets) > 1):
             return True
 
         return False
     
-    def getAmplitude(ket):
+    def getAmplitude(self, ket):
         return self.value.coeff(ket)
 
-    def getKets():
+    def getKets(self):
         v = self.value
+        syms = list(v.free_symbols)
+        kets = []
+        for sym in syms:
+            if (hasattr(sym, 'label')):
+                kets.append(sym)
+        
+        return kets
+    
+    def getExpressionKets(self, e):
+        v = e
         syms = list(v.free_symbols)
         kets = []
         for sym in syms:
@@ -72,8 +82,8 @@ class State:
         s1 = self.value
         s2 = s
         
-        kets1 = s1.getKets()
-        kets2 = s2.getKets()
+        kets1 = self.getExpressionKets(s1)
+        kets2 = self.getExpressionKets(s2)
         
         if (set(kets1) != set(kets2)):
             return False
@@ -218,10 +228,13 @@ class StateSystem:
                 self.correlations[e_uid].state_uids.pop(i)
 
     def deleteCorrelation(self, correlation_uid):
-        for nid in self.correlations[correlation_uid].state_uids:
-            self.states.pop(nid)
+        try:
+            for nid in self.correlations[correlation_uid].state_uids:
+                self.states.pop(nid)
 
-        self.correlations.pop(correlation_uid)
+                self.correlations.pop(correlation_uid)
+        except KeyError:
+            pass
 
     def copyCorrelation(self, correlation_uid):
         copy_e = StateCorrelation(self.correlations[correlation_id].weight)
@@ -233,8 +246,6 @@ class StateSystem:
             new_n.value = state.value
 
             self.correlateState(new_n.uid, copy_e.uid)
-
-        pass
 
     def composedCorrelations(self, qudits):
         eids_base = []
@@ -302,29 +313,28 @@ class StateSystem:
 ###############################################################
 
     #This is where we split single system states into one correlation per computational base 
-    def splitQuditState(self, qudit):
-        correlation_ids = self.getQuditCorrelations(qudit)
-        for eid in correlation_ids:
-            state = self.getQuditStateInCorrelation(qudit,eid)
-            if (state.isSuperposed()):
-                kets = state.getKets()
-                for ket in kets:
-                    eid_copy = self.copyCorrelation(eid)
-                    ampl = state.getAplitude(ket)
+    def splitQuditStates(self, qudits):
+        clean_up_ids = []
+        for qudit in qudits:
+            correlation_ids = self.getQuditCorrelations(qudit)
+            for eid in correlation_ids:
+                state_uid = self.getQuditStateInCorrelation(qudit,eid)
+                state = self.states[state_uid]
+                if (state.isSuperposed()):
+                    clean_up_ids.append(eid)
+                    kets = state.getKets()
+                    for ket in kets:
+                        eid_copy = self.copyCorrelation(eid)
+                        ampl = state.getAplitude(ket)
 
-                    #Update Correlation Copy
-                    state_copy_uid = self.getQuditStateInCorrelation(qudit,eid_copy)
-                    self.states[state_copy_uid].value = ket
-                    self.correlations[eid_copy].weight *= ampl
-        
-        #Clean-up old correlations
-        for corr_id in correlation_ids:
-            self.deleteCorrelation(corr_id)
-
-    #This is where we split single system states into one correlation per computational base 
-    def splitQuditsStates(self, qudits):
-        for q in qudits:
-            self.splitQuditState(q)
+                        #Update Correlation Copy
+                        state_copy_uid = self.getQuditStateInCorrelation(qudit,eid_copy)
+                        self.states[state_copy_uid].value = ket
+                        self.correlations[eid_copy].weight *= ampl
+            
+            #Clean-up old correlations
+            for corr_id in clean_up_ids:
+                self.deleteCorrelation(corr_id)
 
 ###############################################################
 # SIMPLIFY
@@ -531,7 +541,7 @@ class StateSystem:
 
     def measure(self, qudits):
         # iterate over each hyper correlation the qudit is in
-        self.splitQuditsStates(qudits)
+        self.splitQuditStates(qudits)
 
         for qudit in qudits:
             states = self.getQuditStates(qudit)
@@ -540,7 +550,7 @@ class StateSystem:
 
     # TODO calculate how much we are omitting (like Quirk does)
     # Calculate loss
-    def postSelectZ(self, qudits, s):
+    def postSelect(self, qudits, s):
         self.measure(qudits)
         for qudit in qudits:
             stateIds = self.getQuditStates(qudit)

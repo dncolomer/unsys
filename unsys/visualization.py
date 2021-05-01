@@ -59,7 +59,7 @@ def printStateSystem(state_system, subs=[]):
     for e in state_system.correlations:
         phelper = []
         for ql in state_system.quditLabels:
-            nid = state_system.getQubitStatesInCorrelation(ql,e)
+            nid = state_system.getQuditStateInCorrelation(ql,e)
 
             if (nid is not None):
                 replaced = ' '
@@ -71,7 +71,10 @@ def printStateSystem(state_system, subs=[]):
                     if (sp.symbols(sub) in state.free_symbols):
                         state = state.subs(sp.symbols(sub),subs[sub])
 
-                phelper.append(state)
+                if (state_system.states[nid].measured):
+                    phelper.append(str(state) + ' M')
+                else:
+                    phelper.append(state)
             else:
                 phelper.append("N/A")
         
