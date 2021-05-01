@@ -1,4 +1,4 @@
-# IntEnt Toolkit by Uncertain Systems
+# \_intent Toolkit by Uncertain Systems
 Interference & Entanglement Toolkit
 
 # Installation
@@ -15,9 +15,9 @@ Or you can clone this repository and run `pip3 install -e .` from inside the top
 
 # The Basics
 
-IntEnt is all about `StateSystems` and exploring their interference and entanglement properties. `StateSystems` are systems of quantum states and their correlations.
+\_intent is all about `StateSystems` and exploring their interference and entanglement properties. `StateSystems` are systems of quantum states and their correlations.
 
-With IntEnt you can create `StateSystems` and study their entanlement by means of operating on the existing correlations. The following operations are available:
+With \_intent you can create `StateSystems` and study their entanlement by means of operating on the existing correlations. The following operations are available:
 
 - `merging`: //wip
 - `splitting`: //wip
@@ -25,7 +25,7 @@ With IntEnt you can create `StateSystems` and study their entanlement by means o
 - `decomposing`: //wip
 - `simplifying`: //wip
 
-IntEnt also provides you with tools to explore interference effects on `StateSystems`. IntEnt comes with a rewrite mechanism that is capable of evolving a `StateSystems` following the rules of quantum systems. This rewrite is designed to allow you to explore and design interference patterns and or to explore the intereference effects in existing quantum algorithms.
+\_intent also provides you with tools to explore interference effects on `StateSystems`. \_intent comes with a rewrite mechanism that is capable of evolving a `StateSystems` following the rules of quantum systems. This rewrite is designed to allow you to explore and design interference patterns and or to explore the intereference effects in existing quantum algorithms.
 
 ## Symbolic StateSytsems
 
