@@ -2,15 +2,6 @@ import numpy as np
 import sympy as sp
 import sympy.physics.quantum as spq
 
-#symbolic ket
-#symket = 
-
-#actual kets
-zero_ket = np.array([1, 0], dtype=np.complex_)
-one_ket = np.array([0, 1], dtype=np.complex_)
-plus_ket = np.array([1 / np.sqrt(2), 1 / np.sqrt(2)], dtype=np.complex_)
-minus_ket = np.array([1 / np.sqrt(2), -1 / np.sqrt(2)], dtype=np.complex_)
-
 X = {
     'name':'X',
     'rules': [{
