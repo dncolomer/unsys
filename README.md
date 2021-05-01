@@ -8,7 +8,7 @@ Interference & Entanglement Toolkit
 You can install this package like this:
 
 ```shell
-pip3 install git+dncolomer/ehsim_prototype.git
+pip3 install git+dncolomer/_intent.git
 ```
 
 Or you can clone this repository and run `pip3 install -e .` from inside the top level directory.

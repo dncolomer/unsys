@@ -11,23 +11,23 @@ python setup.py sdist
 twine upload dist/*
 """
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 here = os.path.abspath(os.path.dirname(__file__))
 with io.open(os.path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = "\n" + f.read()
 
 setup(
-    name="ehsim",
+    name="_intent",
     version=VERSION,
-    author="D Colomer",
-    author_email="dncolomer",
-    description=("Entanglement Hypergraph Simulator"),
+    author="Daniel Colomer",
+    author_email="uncertainsystems@gmail.com",
+    description=("Interference & Entanglement Toolkit"),
     long_description=long_description,
     long_description_content_type="text/markdown",
     license="MIT",
     keywords=["graph", "quantum"],
-    url="https://github.com/dncolomer/ehsim_prototype/tarball/" + VERSION,
+    url="https://github.com/dncolomer/_intent/tarball/" + VERSION,
     packages=find_packages(exclude=["tests", "*.tests", "*.tests.*", "tests.*"]),
     classifiers=[],
     install_requires=[
