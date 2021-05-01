@@ -45,6 +45,58 @@ class State:
         self.correlation_uid = None
         self.replaced = False
 
+    def isSuperposed():
+        nbKets = self.getKets()
+
+        if (len(kets) > 1):
+            return True
+
+        return False
+    
+    def getAmplitude(ket):
+        return self.value.coeff(ket)
+
+    def getKets():
+        v = self.value
+        syms = list(v.free_symbols)
+        kets = []
+        for sym in syms:
+            if (hasattr(sym, 'label')):
+                kets.append(sym)
+        
+        return kets
+
+    #Assumption syngle qudit states
+    #TODO should we have states and not expressions as input?
+    def valueEq(self, s):
+        s1 = self.value
+        s2 = s
+        
+        kets1 = s1.getKets()
+        kets2 = s2.getKets()
+        
+        if (set(kets1) != set(kets2)):
+            return False
+        
+        ref1_arg = sp.arg(s1.coeff(kets1[0]))
+        ref2_arg = sp.arg(s2.coeff(kets1[0]))
+        for ket in kets1:
+            s1_abs = sp.Abs(s1.coeff(ket))
+            s1_arg = sp.arg(s1.coeff(ket))
+
+            s2_abs = sp.Abs(s2.coeff(ket))
+            s2_arg = sp.arg(s2.coeff(ket))
+
+            s1_relphase = s2_relphase = 0
+            if (ket != kets1[0]):
+                s1_relphase =  sp.Abs(ref1_arg - s1_arg)
+                s2_relphase =  sp.Abs(ref2_arg - s2_arg)
+
+            if (s1_relphase != s2_relphase or s1_abs != s2_abs):
+                return False
+        
+        return True
+
 class StateCorrelation:
     def __init__(self, weight):
         self.state_uids = []
@@ -112,43 +164,6 @@ class StateSystem:
 # UTILS
 ###############################################################
 
-    #Assumption syngle qudit states
-    #TODO should we have states and not expressions as input?
-    def stateEq(self, s1, s2):
-        syms1 = list(s1.free_symbols)
-        kets1 = []
-        for sym in syms1:
-            if (hasattr(sym, 'label')):
-                kets1.append(sym)
-
-        syms2 = list(s2.free_symbols)
-        kets2 = []
-        for sym in syms2:
-            if (hasattr(sym, 'label')):
-                kets2.append(sym)
-        
-        if (set(kets1) != set(kets2)):
-            return False
-        
-        ref1_arg = sp.arg(s1.coeff(kets1[0]))
-        ref2_arg = sp.arg(s2.coeff(kets1[0]))
-        for ket in kets1:
-            s1_abs = sp.Abs(s1.coeff(ket))
-            s1_arg = sp.arg(s1.coeff(ket))
-
-            s2_abs = sp.Abs(s2.coeff(ket))
-            s2_arg = sp.arg(s2.coeff(ket))
-
-            s1_relphase = s2_relphase = 0
-            if (ket != kets1[0]):
-                s1_relphase =  sp.Abs(ref1_arg - s1_arg)
-                s2_relphase =  sp.Abs(ref2_arg - s2_arg)
-
-            if (s1_relphase != s2_relphase or s1_abs != s2_abs):
-                return False
-        
-        return True
-
     def getQubitStates(self, qubit):
         uids = []
         for n in self.states:
@@ -157,7 +172,7 @@ class StateSystem:
 
         return uids
 
-    def getQubitStatesInCorrelation(self, qubit, correlation_uid):
+    def getQubitStateInCorrelation(self, qubit, correlation_uid):
         for n in self.states:
             if self.states[n].qudit == qubit:
                 if (self.states[n].correlation_uid is None and correlation_uid is None) or (
@@ -261,7 +276,7 @@ class StateSystem:
                 return None
             else:
                 w = self.correlations[eid].weight
-                n = self.states[self.getQubitStatesInCorrelation(eid)]
+                n = self.states[self.getQubitStateInCorrelation(eid)]
 
                 if (i == 0):
                     new_n.value = n.value * w
@@ -290,16 +305,21 @@ class StateSystem:
     def splitQubitState(self, qubit):
         correlation_ids = self.getQubitCorrelations(qubit)
         for eid in correlation_ids:
-            state = self.getQubitStatesInCorrelation(qubit,eid)
-            if (not self.stateEq(sqp.Ket('0'),state.value) and not self.stateEq(sqp.Ket('1'),state.value)):
-                eid_copy = self.copyCorrelation(eid)
-                coeff_0 = self.states[self.correlations[eid]].value.coeff(spq.Ket('0'))
-                coeff_1 = self.states[self.correlations[eid]].value.coeff(spq.Ket('1'))
-                self.states[self.correlations[eid]].value = spq.Ket('0')
-                self.states[self.correlations[eid_copy]].value = spq.Ket('1')
+            state = self.getQubitStateInCorrelation(qubit,eid)
+            if (state.isSuperposed()):
+                kets = state.getKets()
+                for ket in kets:
+                    eid_copy = self.copyCorrelation(eid)
+                    ampl = state.getAplitude(ket)
 
-                self.correlations[eid].weight *= coeff_0
-                self.correlations[eid_copy].weight *= coeff_1 
+                    #Update Correlation Copy
+                    state_copy_uid = self.getQubitStateInCorrelation(qubit,eid_copy)
+                    self.states[state_copy_uid].value = ket
+                    self.correlations[eid_copy].weight *= ampl
+        
+        #Clean-up old correlations
+        for corr_id in correlation_ids:
+            self.deleteCorrelation(corr_id)
 
     #This is where we split single system states into one correlation per computational base 
     def splitQubitsStates(self, qubits):
@@ -312,10 +332,10 @@ class StateSystem:
 
     def canSimplifyCorrelations(self, base_e, cand_e, qubits):
         for q in qubits:
-            base_n = self.getQubitStatesInCorrelation(q,base_e)
-            cand_n = self.getQubitStatesInCorrelation(q,cand_e)
+            base_n = self.getQubitStateInCorrelation(q,base_e)
+            cand_n = self.getQubitStateInCorrelation(q,cand_e)
 
-            if (not self.stateEq(self.states[base_n].value, self.states[cand_n].value)):
+            if (not self.states[base_n].valueEq(self.states[cand_n].value)):
                 return False
 
         return True
@@ -401,8 +421,8 @@ class StateSystem:
         self.correlations[new_e.uid] = new_e
 
         for q in qubits:
-            base_n = self.getQubitStatesInCorrelation(q,base_e)
-            cand_n = self.getQubitStatesInCorrelation(q,cand_e)
+            base_n = self.getQubitStateInCorrelation(q,base_e)
+            cand_n = self.getQubitStateInCorrelation(q,cand_e)
 
             self.moveCorrelation(base_n,base_e,new_e.uid)
             self.deleteState(cand_n)
@@ -410,10 +430,10 @@ class StateSystem:
 
     def canDecomposeCorrelations(self, base_e, cand_e, qubits):
         for q in qubits:
-            base_n = self.getQubitStatesInCorrelation(q,base_e)
-            cand_n = self.getQubitStatesInCorrelation(q,cand_e)
+            base_n = self.getQubitStateInCorrelation(q,base_e)
+            cand_n = self.getQubitStateInCorrelation(q,cand_e)
 
-            if (not self.stateEq(self.states[base_n].value, self.states[cand_n].value)):
+            if (not self.states[base_n].valueEq(self.states[cand_n].value)):
                 return False
 
         return True
@@ -461,11 +481,11 @@ class StateSystem:
         for i,m in enumerate(match):
             q = qubit_map[i]
 
-            if (self.getQubitStatesInCorrelation(q,euid) is None):
+            if (self.getQubitStateInCorrelation(q,euid) is None):
                 return False
             else:
-                state = self.states[self.getQubitStatesInCorrelation(q,euid)]
-                if (not self.stateEq(state.value,m)):
+                state = self.states[self.getQubitStateInCorrelation(q,euid)]
+                if (not state.valueEq(m)):
                     return False
 
         return True
@@ -478,13 +498,13 @@ class StateSystem:
         for i,m in enumerate(replace):
             q = qubit_map[i]
 
-            if (not self.states[self.getQubitStatesInCorrelation(q,euid)].replaced):
-                self.states[self.getQubitStatesInCorrelation(q,euid)].value = m
+            if (not self.states[self.getQubitStateInCorrelation(q,euid)].replaced):
+                self.states[self.getQubitStateInCorrelation(q,euid)].value = m
 
                 m = sp.simplify(m)
                 m = sp.expand(m)
 
-                self.states[self.getQubitStatesInCorrelation(q,euid)].replaced = True
+                self.states[self.getQubitStateInCorrelation(q,euid)].replaced = True
 
     #qubit_map=["q0","q1","q2"]
     def rewrite(self,rules,qubit_map,params_map=[]):
@@ -510,58 +530,21 @@ class StateSystem:
 ###############################################################
 
     def measure(self, qubits):
-        pass
-        '''# iterate over each hyper correlation the qubit is in
-        for q in qubits:
-            correlation_ids = self.getQubitCorrelations(q)
-            if len(correlation_ids) == 0:
-                # if the qubit is in the comp. basis then we just flag it as measured = True
-                # remve any global phase
-                # Note: Quirk keeps track of the phase so that a statevector (assuming measurement deferred can still be shown)
-                # self.states[state.uid].value = self.correctPhase(state.value)
-                state = self.states[self.getQubitStatesInCorrelation(q, None)]
-                self.states[state.uid].measured = True
-                if not self.stateEq(state.value, spq.Ket('1')) and not self.stateEq(
-                    state.value, spq.Ket('0')
-                ):
-                    # if the qubit is not then we need to split the correlation into 2.
-                    # One where the state will be in the 0 state + measured = True
-                    # One where the state will be in the 1 state + measured = True
-                    self.splitCorrelationZ(None, state.qudit)
-            else:
-                for e_id in correlation_ids:
-                    # if the qubit is in the comp. basis then we just flag it as measured = False
-                    # remve any global phase
-                    # Note: Quirk keeps track of the phase so that a statevector (assuming measurement deferred can still be shown)
-                    # self.states[state.uid].value = self.correctPhase(state.value)
-                    state = self.states[self.getQubitStatesInCorrelation(q, e_id)]
-                    self.states[state.uid].measured = True
-                    if not self.stateEq(state.value, spq.Ket('1')) and not self.stateEq(
-                        state.value, spq.Ket('0')
-                    ):
-                        # if the qubit is not then we need to split the correlation into 2.
-                        # One where the state will be in the 0 state + measured = True
-                        # One where the state will be in the 1 state + measured = True
-                        self.splitCorrelationZ(e_id, state.qudit)
+        # iterate over each hyper correlation the qubit is in
+        self.splitQubitsStates(qubits)
 
-        return'''
+        for qubit in qubits:
+            states = self.getQubitStates(qubit)
+            for state_uid in states:
+                self.states[state_uid].measured = True
 
     # TODO calculate how much we are omitting (like Quirk does)
-    def postSelectZ(self, qubits, state):
-        pass
-        '''self.measure(qubits)
-        loss = 0
+    # Calculate loss
+    def postSelectZ(self, qubits, s):
+        self.measure(qubits)
         for qubit in qubits:
             stateIds = self.getQubitStates(qubit)
             for stateId in stateIds:
                 state = self.states[stateId]
-                if (not self.stateEq(state.value, state)):
-                    if (state.correlation_uid is not None):
-                        correlation = self.correlations[state.correlation_uid]
-                        loss = loss + (
-                            correlation.weight.real ** 2 + correlation.weight.imag ** 2
-                        )
-
+                if (not state.valueEq(s)):
                     self.deleteCorrelation(state.correlation_uid)
-
-        return loss'''

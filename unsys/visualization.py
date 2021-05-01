@@ -43,32 +43,15 @@ def cytoscapeExport(state_system):
 def toStateVector(self):
     pass
 
+#TODO how to use this for qudits in general?
 def simplifiedState(state_system, state):
-    #This can be expensive!
-    state = sp.simplify(state)
-    state = sp.expand(state)
+    pass
 
-    if (state_system.stateEq(state,spq.Ket('0'))):
-        return "|0>"
-
-    if (state_system.stateEq(state,spq.Ket('1'))):
-        return "|1>"
-
-    if (state_system.stateEq(state,spq.Ket('0')/sp.sqrt(2) + spq.Ket('1')/sp.sqrt(2))):
-        return "|+>"
-
-    if (state_system.stateEq(state,spq.Ket('0')/sp.sqrt(2) - spq.Ket('1')/sp.sqrt(2))):
-        return "|->"
-    
-    state = sp.simplify(state)
-    
-    return str(state)
-
-def printState(state, simplify=True, subs=[]):
+def printState(state, subs=[]):
     #TODO
     print(state.value)
 
-def printStateSystem(state_system, simplify=True, subs=[]):
+def printStateSystem(state_system, subs=[]):
     print("      ".join(str(ql) for ql in state_system.quditLabels))
     print("------".join("--" for ql in state_system.quditLabels))  
     phelper = []
@@ -88,10 +71,7 @@ def printStateSystem(state_system, simplify=True, subs=[]):
                     if (sp.symbols(sub) in state.free_symbols):
                         state = state.subs(sp.symbols(sub),subs[sub])
 
-                if (simplify):
-                    phelper.append(simplifiedState(state_system,state))
-                else:
-                    phelper.append(state)
+                phelper.append(state)
             else:
                 phelper.append("N/A")
         
