@@ -8,8 +8,6 @@ import string
 # global variables
 state_nb = 0
 
-digs = string.digits + string.ascii_letters
-
 def getUID(prefix="id"):
     global state_nb
 
