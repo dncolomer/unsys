@@ -61,3 +61,46 @@ CCX = {
         'replace':[spq.Ket(1), spq.Ket(1)]
     }]
 }
+
+'''MS = {
+    'name':'Mølmer–Sørensen gate',
+    'sym_map': [spq.Ket('e'), spq.Ket('g')],
+    'rules': [{
+        'match':[0, 0],
+        'replace':[{
+                'weight': 1/spq.sqrt(2),
+                'kets': [0, 0]
+            },{
+                'weight': sp.I/spq.sqrt(2),
+                'kets': [1, 1]
+            }
+        ]},{
+        'match':[0, 1],
+        'replace':[{
+                'weight': 1/spq.sqrt(2),
+                'kets': [0, 1]
+            },{
+                'weight': -1*sp.I/spq.sqrt(2),
+                'kets': [1, 0]
+            }
+        ]},{
+        'match':[1, 0],
+        'replace':[{
+                'weight': 1/spq.sqrt(2),
+                'kets': [1, 0]
+            },{
+                'weight': -1*sp.I/spq.sqrt(2),
+                'kets': [0, 1]
+            }
+        ]},{
+        'match':[1, 1],
+        'replace':[{
+                'weight': 1/spq.sqrt(2),
+                'kets': [1, 1]
+            },{
+                'weight': sp.I/spq.sqrt(2),
+                'kets': [0, 0]
+            }
+        ]},
+    ]
+}'''
