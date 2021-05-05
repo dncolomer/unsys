@@ -62,9 +62,10 @@ CCX = {
     }]
 }
 
-'''MS = {
+MS = {
     'name':'Mølmer–Sørensen gate',
     'sym_map': [spq.Ket('e'), spq.Ket('g')],
+    'params_map':[],
     'rules': [{
         'match':[0, 0],
         'replace':[{
@@ -103,4 +104,4 @@ CCX = {
             }
         ]},
     ]
-}'''
+}

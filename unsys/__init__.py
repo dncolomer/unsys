@@ -478,41 +478,40 @@ class StateSystem:
 # REWRITE
 ###############################################################
 
-    # match [1,1,0]
-    # correlation {uid = ...}
-    # map ["q0","q1","q2"]
-    def isMatch(self,match,correlation,qudit_map):
-        euid = None
-        if (correlation is not None):
-            euid = self.correlations[correlation].uid
-
-        for i,m in enumerate(match):
+    #
+    def isMatch(self, match_rule, correlation_uid, qudit_map, sym_map):
+        for i,m in enumerate(match_rule):
             q = qudit_map[i]
+            sym = sym_map[m]
+            state_uid = self.getQuditStateInCorrelation(q, correlation_uid)
 
-            if (self.getQuditStateInCorrelation(q,euid) is None):
+            #qudit has no state in this crrelation
+            if (state_uid is None):
                 return False
-            else:
-                state = self.states[self.getQuditStateInCorrelation(q,euid)]
-                if (not state.valueEq(m)):
-                    return False
+            
+            #qudit is in a different state
+            if (not self.states[state_uid].valueEq(sym)):
+                return False
 
         return True
     
-    def replaceMatch(self,correlation,replace,qudit_map):
-        euid = None
-        if (correlation is not None):
-            euid = self.correlations[correlation].uid
+    #replace_rules can have multiple rules in it (array of arrays)
+    def replaceMatch(self, replace_rules, correlation_uid, qudit_map, sym_map):
+        w = self.correlations[correlation_uid].weight
+        for replace_rule in replace_rules:
+            #copy correlatin
+            new_c = self.copyCorrelation(correlation_uid)
+            new_c.weight = new_c.weight * replace_rule['weight'] * w
+            self.correlations[new_c.uid] = new_c
 
-        for i,m in enumerate(replace):
-            q = qudit_map[i]
-
-            if (not self.states[self.getQuditStateInCorrelation(q,euid)].replaced):
-                self.states[self.getQuditStateInCorrelation(q,euid)].value = m
-
-                m = sp.simplify(m)
-                m = sp.expand(m)
-
-                self.states[self.getQuditStateInCorrelation(q,euid)].replaced = True
+            #populate with new states
+            for i,m in enumerate(replace_rule['kets']):
+                q = qudit_map[i]
+                sym = sym_map[m]
+                state_uid = self.getQuditStateInCorrelation(q, new_c.uid)
+                self.states[state_uid].value = sym
+ 
+        self.deleteCorrelation(correlation_uid)
 
     #qudit_map=["q0","q1","q2"]
     def rewrite(self,rules,qudit_map,params_map=[]):
@@ -521,11 +520,12 @@ class StateSystem:
             for n in self.states:
                 self.states[n].replaced = False
 
+            sym_map = rules['sym_map']
             for rule in rules['rules']:
                 #find matches in correlations
-                for e in self.correlations:
-                    if (self.isMatch(rule['match'],e,qudit_map)):
-                        self.replaceMatch(e,rule['replace'],qudit_map)
+                for corr in self.correlations:
+                    if (self.isMatch(rule['match'], corr, qudit_map, sym_map)):
+                        self.replaceMatch(rule['replace'], corr, qudit_map, sym_map)
                 
                 #find matches in system
                 if (self.isMatch(rule['match'],None,qudit_map)):
