@@ -5,8 +5,6 @@ import sympy.physics.quantum as spq
 #TODO get rid of sym_map
 X = {
     'name':'X gate',
-    'sym_map': [spq.Ket('0'), spq.Ket('1')],
-    'params_map':[],
     'rules': [{
         'match':[spq.Ket('0')],
         'replace':[{
