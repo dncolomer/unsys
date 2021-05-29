@@ -183,6 +183,10 @@ class StateSystem:
     def getQuditStateInCorrelation(self, qudit, correlation_uid):
         for n in self.states:
             if self.states[n].qudit == qudit:
+                print(self.states[n].qudit)
+                print(self.states[n].correlation_uid)
+                print("---")
+                print(correlation_uid)
                 if (self.states[n].correlation_uid is None and correlation_uid is None) or (
                     self.states[n].correlation_uid == correlation_uid
                 ):
@@ -235,15 +239,18 @@ class StateSystem:
             pass
 
     def copyCorrelation(self, correlation_uid):
-        copy_e = StateCorrelation(self.correlations[correlation_id].weight)
+        copy_e = StateCorrelation(self.correlations[correlation_uid].weight)
         self.correlations[copy_e.uid] = copy_e
 
-        for n in self.correlations[correlation_uid]:
+        for n in self.correlations[correlation_uid].state_uids:
             state = self.states[n]
             new_n = State(state.qudit,self.dimension)
             new_n.value = state.value
+            self.states[new_n.uid] = new_n
 
             self.correlateState(new_n.uid, copy_e.uid)
+        
+        return copy_e.uid
 
     def composedCorrelations(self, qudits):
         eids_base = []
@@ -479,12 +486,13 @@ class StateSystem:
 ###############################################################
 
     #
-    def isMatch(self, match_rule, correlation_uid, qudit_map, sym_map):
-        for i,m in enumerate(match_rule):
+    def isMatch(self, match_rule, correlation_uid, qudit_map):
+        for i, sym in enumerate(match_rule):
             q = qudit_map[i]
-            sym = sym_map[m]
             state_uid = self.getQuditStateInCorrelation(q, correlation_uid)
 
+            print(q)
+            print(correlation_uid)
             #qudit has no state in this crrelation
             if (state_uid is None):
                 return False
@@ -496,36 +504,38 @@ class StateSystem:
         return True
     
     #replace_rules can have multiple rules in it (array of arrays)
-    def replaceMatch(self, replace_rules, correlation_uid, qudit_map, sym_map):
+    def replaceMatch(self, replace_rules, correlation_uid, qudit_map):
         w = self.correlations[correlation_uid].weight
         for replace_rule in replace_rules:
             #copy correlatin
-            new_c = self.copyCorrelation(correlation_uid)
+            new_uid = self.copyCorrelation(correlation_uid)
+            new_c = self.correlations[new_uid]
             new_c.weight = new_c.weight * replace_rule['weight'] * w
             self.correlations[new_c.uid] = new_c
 
             #populate with new states
-            for i,m in enumerate(replace_rule['kets']):
+            for i,sym in enumerate(replace_rule['kets']):
                 q = qudit_map[i]
-                sym = sym_map[m]
                 state_uid = self.getQuditStateInCorrelation(q, new_c.uid)
                 self.states[state_uid].value = sym
  
         self.deleteCorrelation(correlation_uid)
 
     #qudit_map=["q0","q1","q2"]
-    def rewrite(self,rules,qudit_map,params_map=[]):
+    def rewrite(self,rules,qudit_map):
+        correlation_uids = self.correlations.copy().keys()
         if (self.areComposed(qudit_map)):
             #set all replacement tracking t False
             for n in self.states:
                 self.states[n].replaced = False
 
-            sym_map = rules['sym_map']
             for rule in rules['rules']:
                 #find matches in correlations
-                for corr in self.correlations:
-                    if (self.isMatch(rule['match'], corr, qudit_map, sym_map)):
-                        self.replaceMatch(rule['replace'], corr, qudit_map, sym_map)
+                for corr_uid in correlation_uids:
+                    corr = self.correlations[corr_uid]
+                    if (self.isMatch(rule['match'], corr_uid, qudit_map)):
+                        print("MATCH!")
+                        self.replaceMatch(rule['replace'], corr_uid, qudit_map)
                 
                 #find matches in system
                 if (self.isMatch(rule['match'],None,qudit_map)):

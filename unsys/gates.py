@@ -2,106 +2,65 @@ import numpy as np
 import sympy as sp
 import sympy.physics.quantum as spq
 
+#TODO get rid of sym_map
 X = {
-    'name':'X',
+    'name':'X gate',
+    'sym_map': [spq.Ket('0'), spq.Ket('1')],
+    'params_map':[],
     'rules': [{
-        'match':[spq.Ket(0)],
-        'replace':[spq.Ket(1)]
-    },
-    {
-        'match':[spq.Ket(1)],
-        'replace':[spq.Ket(0)]
-    }]
-}
-
-H = {
-    'name':'H',
-    'rules': [{
-        'match':[spq.Ket(0)],
-        'replace':[spq.Ket(0)/sp.sqrt(2) + spq.Ket(1)/sp.sqrt(2)]
-    },
-    {
-        'match':[spq.Ket(1)],
-        'replace':[spq.Ket(0)/sp.sqrt(2) - spq.Ket(1)/sp.sqrt(2)]
-    }]
-}
-
-SWAP = {
-    'name':'SWAP', 
-    'rules': [{
-        'match':[spq.Ket(0), spq.Ket(1)],
-        'replace':[spq.Ket(1), spq.Ket(0)]
-    },
-    {
-        'match':[spq.Ket(1), spq.Ket(0)],
-        'replace':[spq.Ket(0), spq.Ket(1)]
-    }]
-} 
-
-CX = {
-    'name':'CX',
-    'rules': [{
-        'match':[spq.Ket(1), spq.Ket(1)],
-        'replace':[spq.Ket(1), spq.Ket(0)]
-    },
-    {
-        'match':[spq.Ket(1), spq.Ket(0)],
-        'replace':[spq.Ket(1), spq.Ket(1)]
-    }]
-}
-
-CCX = {
-    'name':'CCX',
-    'rules': [{
-        'match':[spq.Ket(1), spq.Ket(1), spq.Ket(1)],
-        'replace':[spq.Ket(1), spq.Ket(0)]
-    },
-    {
-        'match':[spq.Ket(1), spq.Ket(1), spq.Ket(0)],
-        'replace':[spq.Ket(1), spq.Ket(1)]
-    }]
+        'match':[spq.Ket('0')],
+        'replace':[{
+                'weight': 1,
+                'kets': [spq.Ket('1')]
+            }
+        ]},{
+        'match':[spq.Ket('1')],
+        'replace':[{
+                'weight': 1,
+                'kets': [spq.Ket('1')]
+            }
+        ]}
+    ]
 }
 
 MS = {
     'name':'Mølmer–Sørensen gate',
-    'sym_map': [spq.Ket('e'), spq.Ket('g')],
-    'params_map':[],
     'rules': [{
-        'match':[0, 0],
+        'match':[spq.Ket('e'), spq.Ket('e')],
         'replace':[{
-                'weight': 1/spq.sqrt(2),
-                'kets': [0, 0]
+                'weight': 1/sp.sqrt(2),
+                'kets': [spq.Ket('e'), spq.Ket('e')]
             },{
-                'weight': sp.I/spq.sqrt(2),
-                'kets': [1, 1]
+                'weight': sp.I/sp.sqrt(2),
+                'kets': [spq.Ket('g'), spq.Ket('g')]
             }
         ]},{
-        'match':[0, 1],
+        'match':[spq.Ket('e'), spq.Ket('g')],
         'replace':[{
-                'weight': 1/spq.sqrt(2),
-                'kets': [0, 1]
+                'weight': 1/sp.sqrt(2),
+                'kets': [spq.Ket('e'), spq.Ket('g')]
             },{
-                'weight': -1*sp.I/spq.sqrt(2),
-                'kets': [1, 0]
+                'weight': -1*sp.I/sp.sqrt(2),
+                'kets': [spq.Ket('g'), spq.Ket('e')]
             }
         ]},{
-        'match':[1, 0],
+        'match':[spq.Ket('g'), spq.Ket('e')],
         'replace':[{
-                'weight': 1/spq.sqrt(2),
-                'kets': [1, 0]
+                'weight': 1/sp.sqrt(2),
+                'kets': [spq.Ket('g'), spq.Ket('e')]
             },{
-                'weight': -1*sp.I/spq.sqrt(2),
-                'kets': [0, 1]
+                'weight': -1*sp.I/sp.sqrt(2),
+                'kets': [spq.Ket('e'), spq.Ket('g')]
             }
         ]},{
         'match':[1, 1],
         'replace':[{
-                'weight': 1/spq.sqrt(2),
-                'kets': [1, 1]
+                'weight': 1/sp.sqrt(2),
+                'kets': [spq.Ket('g'), spq.Ket('g')]
             },{
-                'weight': sp.I/spq.sqrt(2),
-                'kets': [0, 0]
+                'weight': sp.I/sp.sqrt(2),
+                'kets': [spq.Ket('e'), spq.Ket('e')]
             }
-        ]},
+        ]}
     ]
 }
