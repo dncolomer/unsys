@@ -523,7 +523,7 @@ class StateSystem:
 
     #qudit_map=["q0","q1","q2"]
     def rewrite(self,rules,qudit_map):
-        correlation_uids = self.correlations.copy().keys()
+        correlation_uids = self.correlations.keys()
         if (self.areComposed(qudit_map)):
             #set all replacement tracking t False
             for n in self.states:
@@ -531,7 +531,8 @@ class StateSystem:
 
             for rule in rules['rules']:
                 #find matches in correlations
-                for corr_uid in correlation_uids:
+                for i in range(len(correlation_uids)):
+                    corr_uid = correlation_uids[i]
                     corr = self.correlations[corr_uid]
                     if (self.isMatch(rule['match'], corr_uid, qudit_map)):
                         print("MATCH!")
