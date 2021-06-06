@@ -183,10 +183,6 @@ class StateSystem:
     def getQuditStateInCorrelation(self, qudit, correlation_uid):
         for n in self.states:
             if self.states[n].qudit == qudit:
-                print(self.states[n].qudit)
-                print(self.states[n].correlation_uid)
-                print("---")
-                print(correlation_uid)
                 if (self.states[n].correlation_uid is None and correlation_uid is None) or (
                     self.states[n].correlation_uid == correlation_uid
                 ):
@@ -356,6 +352,7 @@ class StateSystem:
         return True
 
     def simplifyCorrelations(self, base_e, cand_e, qudits):
+        #WRONG OR ASSUPTION MISSING IN CODE BEFORE?
         self.correlations[base_e].weight = self.correlations[base_e].weight + self.correlations[cand_e].weight  
         self.deleteCorrelation(cand_e)
 
@@ -491,8 +488,6 @@ class StateSystem:
             q = qudit_map[i]
             state_uid = self.getQuditStateInCorrelation(q, correlation_uid)
 
-            print(q)
-            print(correlation_uid)
             #qudit has no state in this crrelation
             if (state_uid is None):
                 return False
@@ -523,24 +518,28 @@ class StateSystem:
 
     #qudit_map=["q0","q1","q2"]
     def rewrite(self,rules,qudit_map):
-        correlation_uids = self.correlations.keys()
         if (self.areComposed(qudit_map)):
             #set all replacement tracking t False
             for n in self.states:
                 self.states[n].replaced = False
 
+            repl_map = {}
             for rule in rules['rules']:
                 #find matches in correlations
-                for i in range(len(correlation_uids)):
-                    corr_uid = correlation_uids[i]
+                for corr_uid in self.correlations:
                     corr = self.correlations[corr_uid]
                     if (self.isMatch(rule['match'], corr_uid, qudit_map)):
-                        print("MATCH!")
-                        self.replaceMatch(rule['replace'], corr_uid, qudit_map)
+                        repl_map[corr_uid] = rule['replace']
                 
-                #find matches in system
+            #replace matches in correlations
+            for corr_uid in repl_map:
+                repl = repl_map[corr_uid]
+                self.replaceMatch(repl, corr_uid, qudit_map)
+                
+            #find matches in system
+            for rule in rules['rules']:
                 if (self.isMatch(rule['match'],None,qudit_map)):
-                        self.replaceMatch(None,rule['replace'],qudit_map)
+                    self.replaceMatch(None,rule['replace'],qudit_map)
         else:
             print("Can't rewrite. Qudits are not composed")
 
