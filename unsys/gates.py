@@ -24,40 +24,40 @@ X = {
 MS = {
     'name':'Mølmer–Sørensen gate',
     'rules': [{
-        'match':[spq.Ket('e'), spq.Ket('e')],
+        'match':[spq.Ket('0'), spq.Ket('0')],
         'replace':[{
                 'weight': 1/sp.sqrt(2),
-                'kets': [spq.Ket('e'), spq.Ket('e')]
+                'kets': [spq.Ket('0'), spq.Ket('0')]
             },{
                 'weight': sp.I/sp.sqrt(2),
-                'kets': [spq.Ket('g'), spq.Ket('g')]
+                'kets': [spq.Ket('1'), spq.Ket('1')]
             }
         ]},{
-        'match':[spq.Ket('e'), spq.Ket('g')],
+        'match':[spq.Ket('0'), spq.Ket('1')],
         'replace':[{
                 'weight': 1/sp.sqrt(2),
-                'kets': [spq.Ket('e'), spq.Ket('g')]
+                'kets': [spq.Ket('0'), spq.Ket('1')]
             },{
                 'weight': -1*sp.I/sp.sqrt(2),
-                'kets': [spq.Ket('g'), spq.Ket('e')]
+                'kets': [spq.Ket('1'), spq.Ket('0')]
             }
         ]},{
-        'match':[spq.Ket('g'), spq.Ket('e')],
+        'match':[spq.Ket('1'), spq.Ket('0')],
         'replace':[{
                 'weight': 1/sp.sqrt(2),
-                'kets': [spq.Ket('g'), spq.Ket('e')]
+                'kets': [spq.Ket('1'), spq.Ket('0')]
             },{
                 'weight': -1*sp.I/sp.sqrt(2),
-                'kets': [spq.Ket('e'), spq.Ket('g')]
+                'kets': [spq.Ket('0'), spq.Ket('1')]
             }
         ]},{
-        'match':[1, 1],
+        'match':[spq.Ket('1'), spq.Ket('1')],
         'replace':[{
                 'weight': 1/sp.sqrt(2),
-                'kets': [spq.Ket('g'), spq.Ket('g')]
+                'kets': [spq.Ket('1'), spq.Ket('1')]
             },{
                 'weight': sp.I/sp.sqrt(2),
-                'kets': [spq.Ket('e'), spq.Ket('e')]
+                'kets': [spq.Ket('0'), spq.Ket('0')]
             }
         ]}
     ]
