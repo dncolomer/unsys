@@ -277,16 +277,19 @@ class StateSystem:
 ###############################################################
 
     def mergeQuditState(self, qudit):
+        #TODO in roder to support this I need to group correlations 
+        #where the qubit is the only element that's different
+        return None
+
+        '''#prep target correlation where we'll merge
         new_e = StateCorrelation(1)
         self.correlations[new_e.uid] = new_e
 
+        #prep the new node that will hold the merged state
         new_n = State(qudit,self.dimension)
+        
         e_delete = []
         for i,eid in enumerate(self.getQuditCorrelations(qudit)):
-            if (len(self.correlations[eid].state_uids) != 1):
-                print("Can't merge qudit "+qudit)
-                return None
-            else:
                 w = self.correlations[eid].weight
                 n = self.states[self.getQuditStateInCorrelation(eid)]
 
@@ -302,10 +305,10 @@ class StateSystem:
 
         self.correlateState(new_n.uid,new_e.uid)
 
-        return new_e.uid  
+        return new_e.uid ''' 
 
     #This is where we merge single system states into one correlation superposing the comp. basis 
-    def mergeQuditStates(self, qudits):
+    def merge(self, qudits):
         for q in qudits:
             self.mergeQuditState(q)
 
@@ -314,7 +317,7 @@ class StateSystem:
 ###############################################################
 
     #This is where we split single system states into one correlation per computational base 
-    def splitQuditStates(self, qudits):
+    def split(self, qudits):
         clean_up_ids = []
         for qudit in qudits:
             correlation_ids = self.getQuditCorrelations(qudit)
@@ -483,6 +486,11 @@ class StateSystem:
 
     #
     def isMatch(self, match_rule, correlation_uid, qudit_map):
+        if (len(match_rule) != len(qudit_map)):
+            #TODO be more verbose?
+            print("The length of the qudit map does not match the length of the rules")
+            return False
+
         for i, sym in enumerate(match_rule):
             q = qudit_map[i]
             state_uid = self.getQuditStateInCorrelation(q, correlation_uid)
@@ -499,12 +507,11 @@ class StateSystem:
     
     #replace_rules can have multiple rules in it (array of arrays)
     def replaceMatch(self, replace_rules, correlation_uid, qudit_map):
-        w = self.correlations[correlation_uid].weight
         for replace_rule in replace_rules:
             #copy correlatin
             new_uid = self.copyCorrelation(correlation_uid)
             new_c = self.correlations[new_uid]
-            new_c.weight = new_c.weight * replace_rule['weight'] * w
+            new_c.weight = new_c.weight * replace_rule['weight']
             self.correlations[new_c.uid] = new_c
 
             #populate with new states
@@ -548,7 +555,7 @@ class StateSystem:
 
     def measure(self, qudits):
         # iterate over each hyper correlation the qudit is in
-        self.splitQuditStates(qudits)
+        self.split(qudits)
 
         for qudit in qudits:
             states = self.getQuditStates(qudit)
