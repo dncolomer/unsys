@@ -416,7 +416,7 @@ class StateSystem:
         
         return correlation_groups
     
-    def composeQuditCorrelations(self, qudits):
+    def composeQudits(self, qudits):
         correlation_groups = []
         for q in qudits:
             correlation_groups.append(self.getQuditCorrelations(q))
