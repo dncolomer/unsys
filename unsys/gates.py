@@ -21,6 +21,42 @@ X = {
     ]
 }
 
+CX = {
+    'name':'CX gate',
+    'rules': [{
+        'match':[spq.Ket('1'),spq.Ket('0')],
+        'replace':[{
+                'weight': 1,
+                'kets': [spq.Ket('1'),spq.Ket('1')]
+            }
+        ]},{
+        'match':[spq.Ket('1'),spq.Ket('1')],
+        'replace':[{
+                'weight': 1,
+                'kets': [spq.Ket('1'),spq.Ket('0')]
+            }
+        ]}
+    ]
+}
+
+H = {
+    'name':'H gate',
+    'rules': [{
+        'match':[spq.Ket('0')],
+        'replace':[{
+                'weight': 1,
+                'kets': [spq.Ket('0')/sp.sqrt(2) + spq.Ket('1')/sp.sqrt(2)]
+            }
+        ]},{
+        'match':[spq.Ket('1')],
+        'replace':[{
+                'weight': 1,
+                'kets': [spq.Ket('0')/sp.sqrt(2) - spq.Ket('1')/sp.sqrt(2)]
+            }
+        ]}
+    ]
+}
+
 MS = {
     'name':'Mølmer–Sørensen gate',
     'rules': [{

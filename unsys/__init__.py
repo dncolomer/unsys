@@ -326,7 +326,7 @@ class StateSystem:
                     kets = state.getKets()
                     for ket in kets:
                         eid_copy = self.copyCorrelation(eid)
-                        ampl = state.getAplitude(ket)
+                        ampl = state.getAmplitude(ket)
 
                         #Update Correlation Copy
                         state_copy_uid = self.getQuditStateInCorrelation(qudit,eid_copy)
@@ -401,7 +401,6 @@ class StateSystem:
         return not bool(set(base_g) & set(cand_g))
 
     def composeRec(self, correlation_groups, qudits): 
-        print(correlation_groups)    
         base_group = []
         for i,el in enumerate(correlation_groups):
             if (i == 0):
