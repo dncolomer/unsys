@@ -276,7 +276,8 @@ class StateSystem:
 # MERGE STATES
 ###############################################################
 
-    def mergeQuditState(self, qudit):
+    #This only comes with one qudit as an option
+    def merge(self, qudit):
         #TODO in roder to support this I need to group correlations 
         #where the qubit is the only element that's different
         return None
@@ -307,34 +308,30 @@ class StateSystem:
 
         return new_e.uid ''' 
 
-    #This is where we merge single system states into one correlation superposing the comp. basis 
-    def merge(self, qudits):
-        for q in qudits:
-            self.mergeQuditState(q)
-
 ###############################################################
 # SPLIT STATES
 ###############################################################
 
-    #This is where we split single system states into one correlation per computational base 
-    def split(self, qudits):
+    #This is where we split single system states into one correlation per computational base
+    #This only comes with one qudit as an option
+    def split(self, qudit):
         clean_up_ids = []
-        for qudit in qudits:
-            correlation_ids = self.getQuditCorrelations(qudit)
-            for eid in correlation_ids:
-                state_uid = self.getQuditStateInCorrelation(qudit,eid)
-                state = self.states[state_uid]
-                if (state.isSuperposed()):
-                    clean_up_ids.append(eid)
-                    kets = state.getKets()
-                    for ket in kets:
-                        eid_copy = self.copyCorrelation(eid)
-                        ampl = state.getAmplitude(ket)
 
-                        #Update Correlation Copy
-                        state_copy_uid = self.getQuditStateInCorrelation(qudit,eid_copy)
-                        self.states[state_copy_uid].value = ket
-                        self.correlations[eid_copy].weight *= ampl
+        correlation_ids = self.getQuditCorrelations(qudit)
+        for eid in correlation_ids:
+            state_uid = self.getQuditStateInCorrelation(qudit,eid)
+            state = self.states[state_uid]
+            if (state.isSuperposed()):
+                clean_up_ids.append(eid)
+                kets = state.getKets()
+                for ket in kets:
+                    eid_copy = self.copyCorrelation(eid)
+                    ampl = state.getAmplitude(ket)
+
+                    #Update Correlation Copy
+                    state_copy_uid = self.getQuditStateInCorrelation(qudit,eid_copy)
+                    self.states[state_copy_uid].value = ket
+                    self.correlations[eid_copy].weight *= ampl
             
             #Clean-up old correlations
             for corr_id in clean_up_ids:
