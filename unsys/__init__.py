@@ -276,37 +276,85 @@ class StateSystem:
 # MERGE STATES
 ###############################################################
 
+    #Check if correlations are mergable with respect to a given qudit
+    def canMerge(self, qudit, corr1_uid, corr2_uid):
+        suid1 = self.getQuditStateInCorrelation(qudit,corr1_uid)
+        suid2 = self.getQuditStateInCorrelation(qudit,corr2_uid)
+        corr1 = self.correlations[corr1_uid]
+        corr2 = self.correlations[corr1_uid]
+
+        if (suid1 is not None and suid2 is not None):
+            state1 = self.states[suid1]
+            state2 = self.states[suid2]
+
+            if (not state1.valueEq(state2.value) and np.array_equal(corr1.state_uids.sort(), corr2.state_uids.sort())):
+                for state_uid in corr1.state_uids:
+                    q = self.states[state_uid].qudit
+                    if (q != qudit):
+                        sa = self.states[self.getQuditStateInCorrelation(q,corr1_uid)]
+                        sb = self.states[self.getQuditStateInCorrelation(q,corr2_uid)]
+
+                        if (not sa.valueEq(sb.value)):
+                            return False
+                
+                return True
+
+        return False
+
+    #returns the sets in which the qudit is the only different state
+    #returns a set of sets
+    def getQuditMergeSets(self, qudit, correlationIds):
+        mergeSet = []
+        next_batch = []
+
+        prev_id = None
+        for corr_id in correlationIds:
+            if (prev_id is None):
+                prev_id = corr_id
+                mergeSet.append(prev_id)
+            else:
+                if (self.canMerge(qudit, prev_id, corr_id)):
+                    mergeSet.append(corr_id)
+                else:
+                    next_batch.append(corr_id)
+        
+        if (len(next_batch) == 0):
+            return [mergeSet]
+
+        return self.getQuditMergeSets(qudit,next_batch).append(mergeSet)
+
     #This only comes with one qudit as an option
     def merge(self, qudit):
-        #TODO in roder to support this I need to group correlations 
+        #Group correlations 
         #where the qubit is the only element that's different
-        return None
 
-        '''#prep target correlation where we'll merge
-        new_e = StateCorrelation(1)
-        self.correlations[new_e.uid] = new_e
+        corrSets = self.getQuditMergeSets(qudit)
 
-        #prep the new node that will hold the merged state
-        new_n = State(qudit,self.dimension)
-        
-        e_delete = []
-        for i,eid in enumerate(self.getQuditCorrelations(qudit)):
+        for corrSet in corrSets:
+            #preparing a new edge where we'll merge the result
+            new_e = None
+            if (new_e is None):
+                eid_copy = self.copyCorrelation(eid)
+                new_e = self.correlations[eid_copy]
+
+            #calculating new merged state of the given qudit
+            new_n = None
+            for corr in corrSet:
                 w = self.correlations[eid].weight
-                n = self.states[self.getQuditStateInCorrelation(eid)]
-
-                if (i == 0):
+                n = self.states[self.getQuditStateInCorrelation(qudit, eid)]
+                if (new_n is None):
+                    new_n = State(qudit,self.dimension)
                     new_n.value = n.value * w
                 else:
                     new_n.value = new_n.value + (n.value * w)
-                
-                e_delete.append(eid)
-        
-        for eid in e_delete:
-            self.deleteCorrelation(eid)
+            
+            #replace qudit state with new one
+            mergedNode = self.states[self.getQuditStateInCorrelation(qudit, new_e.uid)]
+            mergedNode.value = new_n.value
 
-        self.correlateState(new_n.uid,new_e.uid)
-
-        return new_e.uid ''' 
+            #clean-up old correlations
+            for eid in corrSet:
+                self.deleteCorrelation(eid)
 
 ###############################################################
 # SPLIT STATES
