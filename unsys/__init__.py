@@ -116,6 +116,7 @@ class StateCorrelation:
 # The comma separated format is needed for higher dimensions to be still
 # readable and interpreted as integers
 # TODO support things like |0,1,-2>, etc.
+# TODO we assume this is correct form
 class StateSystem:
     def __init__(self, nb_qudits, d, sv_expr= None, symbolic= False):
         global state_nb
@@ -136,6 +137,7 @@ class StateSystem:
         if sv_expr is not None:
             #TODO check for consistency with d
             syms = list(sv_expr.free_symbols)
+            
             for sym in syms:
                 if (hasattr(sym, 'label')):
                     lbl = str(sym.label[0])
@@ -273,7 +275,36 @@ class StateSystem:
         return True
 
 ###############################################################
-# MERGE STATES
+# SPLIT
+###############################################################
+
+    #This is where we split single system states into one correlation per computational base
+    #This only comes with one qudit as an option
+    def split(self, qudit):
+        clean_up_ids = []
+
+        correlation_ids = self.getQuditCorrelations(qudit)
+        for eid in correlation_ids:
+            state_uid = self.getQuditStateInCorrelation(qudit,eid)
+            state = self.states[state_uid]
+            if (state.isSuperposed()):
+                clean_up_ids.append(eid)
+                kets = state.getKets()
+                for ket in kets:
+                    eid_copy = self.copyCorrelation(eid)
+                    ampl = state.getAmplitude(ket)
+
+                    #Update Correlation Copy
+                    state_copy_uid = self.getQuditStateInCorrelation(qudit,eid_copy)
+                    self.states[state_copy_uid].value = ket
+                    self.correlations[eid_copy].weight *= ampl
+            
+            #Clean-up old correlations
+            for corr_id in clean_up_ids:
+                self.deleteCorrelation(corr_id)
+
+###############################################################
+# MERGE
 ###############################################################
 
     #Check if correlations are mergable with respect to a given qudit
@@ -330,109 +361,100 @@ class StateSystem:
         correlationIds = self.getQuditCorrelations(qudit)
         corrSets = self.getQuditMergeSets(qudit,correlationIds)
 
-        for corrSet in corrSets:
-            if (len(corrSet) > 0):
-                #preparing a new edge where we'll merge the result
-                new_e = None
-                if (new_e is None):
-                    eid_copy = self.copyCorrelation(corrSet[0])
-                    new_e = self.correlations[eid_copy]
-                    new_e.weight = 1
+        if (corrSets is not None):
+            for corrSet in corrSets:
+                if (len(corrSet) > 0):
+                    #preparing a new edge where we'll merge the result
+                    new_e = None
+                    if (new_e is None):
+                        eid_copy = self.copyCorrelation(corrSet[0])
+                        new_e = self.correlations[eid_copy]
+                        new_e.weight = 1
 
-                #calculating new merged state of the given qudit
-                new_n = None
-                for corrId in corrSet:
-                    w = self.correlations[corrId].weight
-                    n = self.states[self.getQuditStateInCorrelation(qudit, corrId)]
-                    if (new_n is None):
-                        new_n = State(qudit,self.dimension)
-                        new_n.value = n.value * w
-                    else:
-                        new_n.value = new_n.value + (n.value * w)
-                
-                #replace qudit state with new one
-                mergedNode = self.states[self.getQuditStateInCorrelation(qudit, new_e.uid)]
-                mergedNode.value = new_n.value
+                    #calculating new merged state of the given qudit
+                    new_n = None
+                    for corrId in corrSet:
+                        w = self.correlations[corrId].weight
+                        n = self.states[self.getQuditStateInCorrelation(qudit, corrId)]
+                        if (new_n is None):
+                            new_n = State(qudit,self.dimension)
+                            new_n.value = n.value * w
+                        else:
+                            new_n.value = new_n.value + (n.value * w)
+                    
+                    #replace qudit state with new one
+                    mergedNode = self.states[self.getQuditStateInCorrelation(qudit, new_e.uid)]
+                    mergedNode.value = new_n.value
 
-                #clean-up old correlations
-                for eid in corrSet:
-                    self.deleteCorrelation(eid)
-
-###############################################################
-# SPLIT STATES
-###############################################################
-
-    #This is where we split single system states into one correlation per computational base
-    #This only comes with one qudit as an option
-    def split(self, qudit):
-        clean_up_ids = []
-
-        correlation_ids = self.getQuditCorrelations(qudit)
-        for eid in correlation_ids:
-            state_uid = self.getQuditStateInCorrelation(qudit,eid)
-            state = self.states[state_uid]
-            if (state.isSuperposed()):
-                clean_up_ids.append(eid)
-                kets = state.getKets()
-                for ket in kets:
-                    eid_copy = self.copyCorrelation(eid)
-                    ampl = state.getAmplitude(ket)
-
-                    #Update Correlation Copy
-                    state_copy_uid = self.getQuditStateInCorrelation(qudit,eid_copy)
-                    self.states[state_copy_uid].value = ket
-                    self.correlations[eid_copy].weight *= ampl
-            
-            #Clean-up old correlations
-            for corr_id in clean_up_ids:
-                self.deleteCorrelation(corr_id)
+                    #clean-up old correlations
+                    for eid in corrSet:
+                        self.deleteCorrelation(eid)
 
 ###############################################################
 # SIMPLIFY
 ###############################################################    
 
-    def canSimplifyCorrelations(self, base_e, cand_e, qudits):
-        for q in qudits:
-            base_n = self.getQuditStateInCorrelation(q,base_e)
-            cand_n = self.getQuditStateInCorrelation(q,cand_e)
+    #Check if correlations are mergable with respect to a given qudit
+    def canSimplify(self, corr1_uid, corr2_uid):
+        corr1 = self.correlations[corr1_uid]
+        corr2 = self.correlations[corr1_uid]
 
-            if (not self.states[base_n].valueEq(self.states[cand_n].value)):
-                return False
+        if (np.array_equal(corr1.state_uids.sort(), corr2.state_uids.sort())):
+            for state_uid in corr1.state_uids:
+                q = self.states[state_uid].qudit
+                sa = self.states[self.getQuditStateInCorrelation(q,corr1_uid)]
+                sb = self.states[self.getQuditStateInCorrelation(q,corr2_uid)]
 
-        return True
+                if (not sa.valueEq(sb.value)):
+                    return False
+            
+            return True
 
-    def simplifyCorrelations(self, base_e, cand_e, qudits):
-        #WRONG OR ASSUPTION MISSING IN CODE BEFORE?
-        self.correlations[base_e].weight = self.correlations[base_e].weight + self.correlations[cand_e].weight  
-        self.deleteCorrelation(cand_e)
+        return False
 
-    def simplifyRec(self, eids, qudits):
-        if (len(eids)) <= 1:
-            return eids
+    #returns the sets in which the qudit is the only different state
+    #returns a set of sets
+    def getSimplifySets(self, correlationIds):
+        simplifySet = []
+        next_batch = []
 
-        for i, base_e in enumerate(eids):
-            for j, cand_e in enumerate(eids):
-                if (i != j and self.canSimplifyCorrelations(base_e, cand_e, qudits)):
-                    self.simplifyCorrelations(base_e, cand_e, qudits)
-                    
-                    #Update the list of correlation ids
-                    eids.remove(cand_e)
-
-                    return self.simplifyRec(eids, qudits)
+        prev_id = None
+        for corr_id in correlationIds:
+            if (prev_id is None):
+                prev_id = corr_id
+                simplifySet.append(prev_id)
+            else:
+                if (self.canSimplify(prev_id, corr_id)):
+                    simplifySet.append(corr_id)
+                else:
+                    next_batch.append(corr_id)
         
-        return eids
+        if (len(next_batch) == 0):
+            return [simplifySet]
 
-    #returns list of new correlations
-    def simplifyQuditCorrelations(self, qudits):
-        # Check if we can decompose
-        if (self.areComposed(qudits)):
-            eids_base = self.composedCorrelations(qudits)
-            return self.simplifyRec(eids_base, qudits)
-        else:
-            print("Error: Qudits are not composed.")
-        
-        return []
+        return self.getSimplifySets(next_batch).append(simplifySet)
 
+    #This only comes with one qudit as an option
+    def simplify(self):
+        #Group correlations 
+        #where the qubit is the only element that's different
+        correlationIds = self.correlations.keys()
+        corrSets = self.getSimplifySets(correlationIds)
+
+        if (len(corrSets) > 0):
+            for corrSet in corrSets:
+                if (len(corrSet) > 0):
+                    #preparing a new edge where we'll simplify the result
+                    eid_copy = self.copyCorrelation(corrSet[0])
+                    new_e = self.correlations[eid_copy]
+                    new_e.weight = 0
+
+                    for corrId in corrSet:
+                        new_e.weight = new_e.weight + self.correlations[corrId].weight
+
+                    #clean-up old correlations
+                    for eid in corrSet:
+                        self.deleteCorrelation(eid)
 
 ###############################################################
 # COMPOSE
