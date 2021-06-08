@@ -327,34 +327,36 @@ class StateSystem:
     def merge(self, qudit):
         #Group correlations 
         #where the qubit is the only element that's different
-
-        corrSets = self.getQuditMergeSets(qudit)
+        correlationIds = self.getQuditCorrelations(qudit)
+        corrSets = self.getQuditMergeSets(qudit,correlationIds)
 
         for corrSet in corrSets:
-            #preparing a new edge where we'll merge the result
-            new_e = None
-            if (new_e is None):
-                eid_copy = self.copyCorrelation(eid)
-                new_e = self.correlations[eid_copy]
+            if (len(corrSet) > 0):
+                #preparing a new edge where we'll merge the result
+                new_e = None
+                if (new_e is None):
+                    eid_copy = self.copyCorrelation(corrSet[0])
+                    new_e = self.correlations[eid_copy]
+                    new_e.weight = 1
 
-            #calculating new merged state of the given qudit
-            new_n = None
-            for corr in corrSet:
-                w = self.correlations[eid].weight
-                n = self.states[self.getQuditStateInCorrelation(qudit, eid)]
-                if (new_n is None):
-                    new_n = State(qudit,self.dimension)
-                    new_n.value = n.value * w
-                else:
-                    new_n.value = new_n.value + (n.value * w)
-            
-            #replace qudit state with new one
-            mergedNode = self.states[self.getQuditStateInCorrelation(qudit, new_e.uid)]
-            mergedNode.value = new_n.value
+                #calculating new merged state of the given qudit
+                new_n = None
+                for corrId in corrSet:
+                    w = self.correlations[corrId].weight
+                    n = self.states[self.getQuditStateInCorrelation(qudit, corrId)]
+                    if (new_n is None):
+                        new_n = State(qudit,self.dimension)
+                        new_n.value = n.value * w
+                    else:
+                        new_n.value = new_n.value + (n.value * w)
+                
+                #replace qudit state with new one
+                mergedNode = self.states[self.getQuditStateInCorrelation(qudit, new_e.uid)]
+                mergedNode.value = new_n.value
 
-            #clean-up old correlations
-            for eid in corrSet:
-                self.deleteCorrelation(eid)
+                #clean-up old correlations
+                for eid in corrSet:
+                    self.deleteCorrelation(eid)
 
 ###############################################################
 # SPLIT STATES
