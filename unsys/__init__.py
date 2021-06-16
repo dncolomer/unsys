@@ -457,45 +457,6 @@ class StateSystem:
                         self.deleteCorrelation(eid)
 
 ###############################################################
-# COMPOSE
-###############################################################
-    
-    def composeCorrelations(self, src_g, target_g, qudits):
-        for src_e in src_g:
-            for target_e in target_g:
-                for state_id in self.correlations[src_e].state_uids:
-                    self.moveCorrelation(state_id,src_e,target_e)
-
-            self.correlations[target_e].weight = self.correlations[target_e].weight * self.correlations[src_e].weight  
-            self.deleteCorrelation(src_e)
-
-    def canComposeCorrelations(self, base_g, cand_g, qudits):
-        return not bool(set(base_g) & set(cand_g))
-
-    def composeRec(self, correlation_groups, qudits): 
-        base_group = []
-        for i,el in enumerate(correlation_groups):
-            if (i == 0):
-                base_group = el
-            else:
-                if (self.canComposeCorrelations(base_group[i], base_group[i-1], qudits)):
-                    correlation_id = self.compose(base_group[i], base_group[i-1], qudits)
-                    correlation_groups.pop(i)
-                    correlation_groups.pop(i-1)
-                    correlation_groups.append([correlation_id])
-
-                    return self.composeRec(correlation_groups, qudits)
-        
-        return correlation_groups
-    
-    def composeQudits(self, qudits):
-        correlation_groups = []
-        for q in qudits:
-            correlation_groups.append(self.getQuditCorrelations(q))
-        
-        return self.composeRec(correlation_groups,qudits)
-
-###############################################################
 # DECOMPOSE
 ###############################################################
 
@@ -548,6 +509,45 @@ class StateSystem:
             print("Error: Qudits are not composed.")
         
         return []
+        
+###############################################################
+# COMPOSE
+###############################################################
+    
+    def composeCorrelations(self, src_g, target_g, qudits):
+        for src_e in src_g:
+            for target_e in target_g:
+                for state_id in self.correlations[src_e].state_uids:
+                    self.moveCorrelation(state_id,src_e,target_e)
+
+            self.correlations[target_e].weight = self.correlations[target_e].weight * self.correlations[src_e].weight  
+            self.deleteCorrelation(src_e)
+
+    def canComposeCorrelations(self, base_g, cand_g, qudits):
+        return not bool(set(base_g) & set(cand_g))
+
+    def composeRec(self, correlation_groups, qudits): 
+        base_group = []
+        for i,el in enumerate(correlation_groups):
+            if (i == 0):
+                base_group = el
+            else:
+                if (self.canComposeCorrelations(base_group[i], base_group[i-1], qudits)):
+                    correlation_id = self.compose(base_group[i], base_group[i-1], qudits)
+                    correlation_groups.pop(i)
+                    correlation_groups.pop(i-1)
+                    correlation_groups.append([correlation_id])
+
+                    return self.composeRec(correlation_groups, qudits)
+        
+        return correlation_groups
+    
+    def composeQudits(self, qudits):
+        correlation_groups = []
+        for q in qudits:
+            correlation_groups.append(self.getQuditCorrelations(q))
+        
+        return self.composeRec(correlation_groups,qudits)
 
 ###############################################################
 # REWRITE
