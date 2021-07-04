@@ -5,7 +5,7 @@ import sympy.physics.quantum as spq
 
 def printQuditSystem(quditSystem):
     for s in quditSystem.states:
-        print("------------ " + s + " ( ampl: " + str(quditSystem.states[s].amplitude) +  ") " + "------------")
+        print("------------ " + s + " ( ampl: " + str(quditSystem.states[s].amplitude) +  " ) " + "------------")
         for sm in quditSystem.states[s].qudit_map:
             print(sm + ": " + str(quditSystem.states[s].qudit_map[sm]))
 
