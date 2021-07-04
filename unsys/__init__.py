@@ -40,27 +40,24 @@ class QuditSystem:
             qudit_nb = 0
             for i in range(0, nb_qudits):
                 qudit_label = "q" + str(i)
+                q = Qudit(qudit_label)                        
+                self.qudits[q.uid] = q
 
-                initial_state = spq.Ket('0')
                 if (symbolic):
                     sv_size = d
                     i = 0
-                    s = None
                     while i < sv_size:
                         sym = sp.symbols(qudit_label+'_'+str(i))
-                        if (i == 0):
-                            s = sym * spq.Ket(i)
-                        else:
-                            s += sym * spq.Ket(i)
+                        s = sym * spq.Ket(i)
+                        
+                        state = State({q.uid: s})
+                        self.states[state.uid] = state
                         
                         i += 1
-                        
-                    initial_state = s
-                
-                q = Qudit(qudit_label)
-                state = State({q.uid: initial_state})
-                self.qudits[q.uid] = q
-                self.states[state.uid] = state
+                else:
+                    s = spq.Ket('0')
+                    state = State({q.uid: s})
+                    self.states[state.uid] = state
         else:
             for qudit_label in initial_states:
                 q = Qudit(qudit_label)
