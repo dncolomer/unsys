@@ -20,10 +20,12 @@ class State:
         self.state_map = state_map
         self.uid = getUID("state#")
 
+#pure hanges the interpretation of qubits with multiple states
 class Qudit:
-    def __init__(self, label):
+    def __init__(self, label, pure= True):
         self.uid = getUID("qudit#")
         self.label = label
+        self.pure = pure
 
 class QuditSystem:
     def __init__(self, nb_qudits, d, initial_states= None, symbolic= False):
