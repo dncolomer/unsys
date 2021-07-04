@@ -3,54 +3,13 @@ import numpy as np
 import sympy as sp
 import sympy.physics.quantum as spq
 
-def cytoscapeExport(state_system):
-    elements = {}
-    elements["states"] = []
-    elements["correlations"] = []
-    for i in state_system.states:
-        # set precision to avoid awkward -zeros
-        s = []
-        for state in state_system.states[i].value:
-            s.append(np.around(state, decimals=3))
+def printQuditSystem(quditSystem):
+    for s in quditSystem.states:
+        print("------------" + s + "------------")
+        for sm in quditSystem.states[s].state_map:
+            print(sm + ": " + str(quditSystem.states[s].state_map[sm]))
 
-        measured = ""
-        if state_system.states[i].measured:
-            measured = "[M]"
-
-        lbl = (
-            str(state_system.states[i].uid)
-            + "  ["
-            + str(state_system.states[i].qudit)
-            + "]  "
-            + str(np.around(s, 3))
-            + " "
-            + measured
-        )
-        nn = {}
-        nn["data"] = {}
-        nn["data"]["id"] = lbl
-
-        if state_system.states[i].correlation_uid is not None:
-            euid = state_system.states[i].correlation_uid
-            l_euid = euid + "  " + str(np.around(state_system.correlations[euid].weight, 3))
-            nn["data"]["parent"] = l_euid
-
-        elements["states"].append(nn)
-
-    print(json.dumps(elements))
-
-# Transforms the full system
-def toStateVector(self):
-    pass
-
-#TODO how to use this for qudits in general?
-def simplifiedState(state_system, state):
-    pass
-
-def printState(state, subs=[]):
-    #TODO
-    print(state.value)
-
+'''
 def printStateSystem(state_system, subs=[]):
     print("      ".join(str(ql) for ql in state_system.quditLabels))
     print("------".join("--" for ql in state_system.quditLabels))  
@@ -93,3 +52,4 @@ def printStateSystem(state_system, subs=[]):
     print("------".join("--" for ql in state_system.quditLabels))
     print("      ".join("  " for ql in state_system.quditLabels))
     print("      ".join("  " for ql in state_system.quditLabels))
+'''

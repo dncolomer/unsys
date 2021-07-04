@@ -6,42 +6,71 @@ import sympy.physics.quantum as spq
 import string
 
 # global variables
-state_nb = 0
+qudit_nb = 0
 
 def getUID(prefix="id"):
-    global state_nb
+    global qudit_nb
 
-    state_nb = state_nb + 1
-    return prefix + str(state_nb - 1)
+    qudit_nb = qudit_nb + 1
+    return prefix + str(qudit_nb - 1)
 
+#state_map is a map with the qubit labels as keys and their spq state expression as value
 class State:
-    def __init__(self, qudit, d, initial_value= None, symbolic= False):
-        self.uid = getUID("s")
-        self.qudit = qudit
+    def __init__(self, state_map):
+        self.state_map = state_map
+        self.uid = getUID("state#")
+
+class Qudit:
+    def __init__(self, label):
+        self.uid = getUID("qudit#")
+        self.label = label
+
+class QuditSystem:
+    def __init__(self, nb_qudits, d, initial_states= None, symbolic= False):
+        global qudit_nb
+
         self.dimension = d
+        self.qudits = {}
+        self.states = {}
+        self.nb_qudits = nb_qudits
 
-        #TODO consistency checks with regards to initial value and dimensionality, etc.
-        self.value = initial_value
-        if (self.value is None):
-            self.value = spq.Ket('0')
-            if (symbolic):
-                sv_size = d
-                i = 0
-                s = None
-                while i < sv_size:
-                    sym = sp.symbols(self.uid+'_'+str(i))
-                    if (i == 0):
-                        s = sym * spq.Ket(i)
-                    else:
-                        s += sym * spq.Ket(i)
-                    
-                    i += 1
-                    
-                self.value = s
+        if (initial_states is None):
+            qudit_nb = 0
+            for i in range(0, nb_qudits):
+                qudit_label = "q" + str(i)
 
-        self.measured = False
-        self.correlation_uid = None
-        self.replaced = False
+                initial_state = spq.Ket('0')
+                if (symbolic):
+                    sv_size = d
+                    i = 0
+                    s = None
+                    while i < sv_size:
+                        sym = sp.symbols(qudit_label+'_'+str(i))
+                        if (i == 0):
+                            s = sym * spq.Ket(i)
+                        else:
+                            s += sym * spq.Ket(i)
+                        
+                        i += 1
+                        
+                    initial_state = s
+                
+                q = Qudit(qudit_label)
+                state = State({q.uid: initial_state})
+                self.qudits[q.uid] = q
+                self.states[state.uid] = state
+        else:
+            for qudit_label in initial_states:
+                q = Qudit(qudit_label)
+                state = State({q.uid: initial_states[qudit_label]})
+                self.qudits[q.uid] = q
+                self.states[state.uid] = state
+           
+'''
+###############################################################
+# UTILS
+###############################################################
+
 
     def isSuperposed(self):
         kets = self.getKets()
@@ -74,8 +103,8 @@ class State:
         
         return kets
 
-    #Assumption syngle qudit states
-    #TODO should we have states and not expressions as input?
+    #Assumption syngle qudit qudits
+    #TODO should we have qudits and not expressions as input?
     def valueEq(self, s):
         s1 = self.value
         s2 = s
@@ -105,539 +134,96 @@ class State:
         
         return True
 
-class StateCorrelation:
-    def __init__(self, weight):
-        self.state_uids = []
-        self.uid = getUID("sc")
-
-        self.weight = weight
-
-# sv_expr is in format Ket('0,1,2') |0,1,2>
-# The comma separated format is needed for higher dimensions to be still
-# readable and interpreted as integers
-# TODO support things like |0,1,-2>, etc.
-# TODO we assume this is correct form
-class StateSystem:
-    def __init__(self, nb_qudits, d, sv_expr= None, symbolic= False):
-        global state_nb
-
-        self.dimension = d
-        self.states = {}
-        self.correlations = {}
-        self.quditLabels = []
-
-        self._gate_log = []
-        self.nb_qudits = nb_qudits
-
-        state_nb = 0
-
-        for i in range(0, nb_qudits):
-            self.quditLabels.append("q" + str(i))
-
-        if sv_expr is not None:
-            #TODO check for consistency with d
-            syms = list(sv_expr.free_symbols)
-            
-            for sym in syms:
-                if (hasattr(sym, 'label')):
-                    lbl = str(sym.label[0])
-                    quditlbls = lbl.split(',')
-                    if (len(quditlbls) == nb_qudits):
-                        coeff = sv_expr.coeff(sym)
-
-                        sc = StateCorrelation(coeff)
-                        self.correlations[sc.uid] = sc
-
-                        j = 0
-                        while j < nb_qudits:
-                            state = State("q"+str(j),self.dimension,symbolic=symbolic)
-                            state.value = spq.Ket(quditlbls[j])
-
-                            self.states[state.uid] = state
-
-                            self.correlateState(state.uid, sc.uid)
-                            j += 1
-                    else:
-                        print("The provided wavefunction is inconsistent with the system's number of qudits.")
-                        print("The affected Kets in the wavefunction have been ignored.")
-        else:
-            sc = StateCorrelation(1)
-            self.correlations[sc.uid] = sc
-
-            for i in range(0, nb_qudits):
-                state = State("q" + str(i), self.dimension, symbolic=symbolic)
-                self.states[state.uid] = state
-
-                self.correlateState(state.uid,sc.uid)
-
-###############################################################
-# UTILS
-###############################################################
-
-    def getQuditStates(self, qudit):
+    def getQuditqudits(self, qudit):
         uids = []
-        for n in self.states:
-            if self.states[n].qudit == qudit:
-                uids.append(self.states[n].uid)
+        for n in self.qudits:
+            if self.qudits[n].qudit == qudit:
+                uids.append(self.qudits[n].uid)
 
         return uids
 
-    def getQuditStateInCorrelation(self, qudit, correlation_uid):
-        for n in self.states:
-            if self.states[n].qudit == qudit:
-                if (self.states[n].correlation_uid is None and correlation_uid is None) or (
-                    self.states[n].correlation_uid == correlation_uid
+    def getQuditquditInCorrelation(self, qudit, correlation_uid):
+        for n in self.qudits:
+            if self.qudits[n].qudit == qudit:
+                if (self.qudits[n].correlation_uid is None and correlation_uid is None) or (
+                    self.qudits[n].correlation_uid == correlation_uid
                 ):
-                    return self.states[n].uid
+                    return self.qudits[n].uid
 
         return None
 
     def getQuditCorrelations(self, qudit):
         uids = []
         for e in self.correlations:
-            state_uids = self.correlations[e].state_uids
-            for state_uid in state_uids:
-                if self.states[state_uid].qudit == qudit:
+            qudit_uids = self.correlations[e].qudit_uids
+            for qudit_uid in qudit_uids:
+                if self.qudits[qudit_uid].qudit == qudit:
                     uids.append(e)
 
         return uids
 
-    def correlateState(self, state_uid, correlation_uid):
-        # assume correlation and state exist
-        if self.states[state_uid].correlation_uid == None:
-            self.states[state_uid].correlation_uid = correlation_uid
-            self.correlations[correlation_uid].state_uids.append(state_uid)
+    def correlatequdit(self, qudit_uid, correlation_uid):
+        # assume correlation and qudit exist
+        if self.qudits[qudit_uid].correlation_uid == None:
+            self.qudits[qudit_uid].correlation_uid = correlation_uid
+            self.correlations[correlation_uid].qudit_uids.append(qudit_uid)
 
-    def moveCorrelation(self, state_uid, src_correlation_uid, target_correlation_uid):
-        # assign to target
-        self.states[state_uid].correlation_uid = target_correlation_uid
-        #pop from src
-        self.correlations[src_correlation_uid].state_uids.pop(self.correlations[src_correlation_uid].state_uids.index(state_uid))
-        #append to target
-        self.correlations[target_correlation_uid].state_uids.append(state_uid)
+    def deletequdit(self, qudit_uid):
+        # assuming qudits only belong to one element
+        if qudit_uid in self.qudits.keys():
+            e_uid = self.qudits[qudit_uid].correlation_uid
 
-    def deleteState(self, state_uid):
-        # assuming states only belong to one element
-        if state_uid in self.states.keys():
-            e_uid = self.states[state_uid].correlation_uid
-
-            self.states.pop(state_uid)
+            self.qudits.pop(qudit_uid)
 
             if e_uid in self.correlations.keys():
-                i = self.correlations[e_uid].state_uids.index(state_uid)
-                self.correlations[e_uid].state_uids.pop(i)
+                i = self.correlations[e_uid].qudit_uids.index(qudit_uid)
+                self.correlations[e_uid].qudit_uids.pop(i)
 
     def deleteCorrelation(self, correlation_uid):
         try:
-            for nid in self.correlations[correlation_uid].state_uids:
-                self.states.pop(nid)
+            for nid in self.correlations[correlation_uid].qudit_uids:
+                self.qudits.pop(nid)
 
                 self.correlations.pop(correlation_uid)
         except KeyError:
             pass
 
     def copyCorrelation(self, correlation_uid):
-        copy_e = StateCorrelation(self.correlations[correlation_uid].weight)
+        copy_e = quditCorrelation(self.correlations[correlation_uid].weight)
         self.correlations[copy_e.uid] = copy_e
 
-        for n in self.correlations[correlation_uid].state_uids:
-            state = self.states[n]
-            new_n = State(state.qudit,self.dimension)
-            new_n.value = state.value
-            self.states[new_n.uid] = new_n
+        for n in self.correlations[correlation_uid].qudit_uids:
+            qudit = self.qudits[n]
+            new_n = qudit(qudit.qudit,self.dimension)
+            new_n.value = qudit.value
+            self.qudits[new_n.uid] = new_n
 
-            self.correlateState(new_n.uid, copy_e.uid)
+            self.correlatequdit(new_n.uid, copy_e.uid)
         
         return copy_e.uid
-
-    def composedCorrelations(self, qudits):
-        eids_base = []
-
-        for i,q in enumerate(qudits):
-            if (i == 0):
-                eids_base = self.getQuditCorrelations(q)
-            else:
-                if (set(eids_base) != set(self.getQuditCorrelations(q))):
-                    return None
-
-        return eids_base
-
-    def areComposed(self, qudits):
-        eids_base = []
-
-        for i,q in enumerate(qudits):
-            if (i == 0):
-                eids_base = self.getQuditCorrelations(q)
-            else:
-                if (set(eids_base) != set(self.getQuditCorrelations(q))):
-                    return False
-
-        return True
-
-###############################################################
-# SPLIT
-###############################################################
-
-    #This is where we split single system states into one correlation per computational base
-    #This only comes with one qudit as an option
-    def split(self, qudit):
-        clean_up_ids = []
-
-        correlation_ids = self.getQuditCorrelations(qudit)
-        for eid in correlation_ids:
-            state_uid = self.getQuditStateInCorrelation(qudit,eid)
-            state = self.states[state_uid]
-            if (state.isSuperposed()):
-                clean_up_ids.append(eid)
-                kets = state.getKets()
-                for ket in kets:
-                    eid_copy = self.copyCorrelation(eid)
-                    ampl = state.getAmplitude(ket)
-
-                    #Update Correlation Copy
-                    state_copy_uid = self.getQuditStateInCorrelation(qudit,eid_copy)
-                    self.states[state_copy_uid].value = ket
-                    self.correlations[eid_copy].weight *= ampl
-            
-            #Clean-up old correlations
-            for corr_id in clean_up_ids:
-                self.deleteCorrelation(corr_id)
-
-###############################################################
-# MERGE
-###############################################################
-
-    #Check if correlations are mergable with respect to a given qudit
-    def canMerge(self, qudit, corr1_uid, corr2_uid):
-        suid1 = self.getQuditStateInCorrelation(qudit,corr1_uid)
-        suid2 = self.getQuditStateInCorrelation(qudit,corr2_uid)
-        corr1 = self.correlations[corr1_uid]
-        corr2 = self.correlations[corr1_uid]
-
-        if (suid1 is not None and suid2 is not None):
-            state1 = self.states[suid1]
-            state2 = self.states[suid2]
-
-            if (not state1.valueEq(state2.value) and np.array_equal(corr1.state_uids.sort(), corr2.state_uids.sort())):
-                for state_uid in corr1.state_uids:
-                    q = self.states[state_uid].qudit
-                    if (q != qudit):
-                        sa = self.states[self.getQuditStateInCorrelation(q,corr1_uid)]
-                        sb = self.states[self.getQuditStateInCorrelation(q,corr2_uid)]
-
-                        if (not sa.valueEq(sb.value)):
-                            return False
-                
-                return True
-
-        return False
-
-    #returns the sets in which the qudit is the only different state
-    #returns a set of sets
-    def getQuditMergeSets(self, qudit, correlationIds):
-        mergeSet = []
-        next_batch = []
-
-        prev_id = None
-        for corr_id in correlationIds:
-            if (prev_id is None):
-                prev_id = corr_id
-                mergeSet.append(prev_id)
-            else:
-                if (self.canMerge(qudit, prev_id, corr_id)):
-                    mergeSet.append(corr_id)
-                else:
-                    next_batch.append(corr_id)
-        
-        if (len(next_batch) == 0):
-            return [mergeSet]
-
-        return self.getQuditMergeSets(qudit,next_batch).append(mergeSet)
-
-    #This only comes with one qudit as an option
-    def merge(self, qudit):
-        #Group correlations 
-        #where the qubit is the only element that's different
-        correlationIds = self.getQuditCorrelations(qudit)
-        corrSets = self.getQuditMergeSets(qudit,correlationIds)
-
-        if (corrSets is not None):
-            for corrSet in corrSets:
-                if (len(corrSet) > 0):
-                    #preparing a new edge where we'll merge the result
-                    new_e = None
-                    if (new_e is None):
-                        eid_copy = self.copyCorrelation(corrSet[0])
-                        new_e = self.correlations[eid_copy]
-                        new_e.weight = 1
-
-                    #calculating new merged state of the given qudit
-                    new_n = None
-                    for corrId in corrSet:
-                        w = self.correlations[corrId].weight
-                        n = self.states[self.getQuditStateInCorrelation(qudit, corrId)]
-                        if (new_n is None):
-                            new_n = State(qudit,self.dimension)
-                            new_n.value = n.value * w
-                        else:
-                            new_n.value = new_n.value + (n.value * w)
-                    
-                    #replace qudit state with new one
-                    mergedNode = self.states[self.getQuditStateInCorrelation(qudit, new_e.uid)]
-                    mergedNode.value = new_n.value
-
-                    #clean-up old correlations
-                    for eid in corrSet:
-                        self.deleteCorrelation(eid)
-
-###############################################################
-# SIMPLIFY
-###############################################################    
-
-    #Check if correlations are mergable with respect to a given qudit
-    def canSimplify(self, corr1_uid, corr2_uid):
-        corr1 = self.correlations[corr1_uid]
-        corr2 = self.correlations[corr1_uid]
-
-        if (np.array_equal(corr1.state_uids.sort(), corr2.state_uids.sort())):
-            for state_uid in corr1.state_uids:
-                q = self.states[state_uid].qudit
-                sa = self.states[self.getQuditStateInCorrelation(q,corr1_uid)]
-                sb = self.states[self.getQuditStateInCorrelation(q,corr2_uid)]
-
-                if (not sa.valueEq(sb.value)):
-                    return False
-            
-            return True
-
-        return False
-
-    #returns the sets in which the qudit is the only different state
-    #returns a set of sets
-    def getSimplifySets(self, correlationIds):
-        simplifySet = []
-        next_batch = []
-
-        prev_id = None
-        for corr_id in correlationIds:
-            if (prev_id is None):
-                prev_id = corr_id
-                simplifySet.append(prev_id)
-            else:
-                if (self.canSimplify(prev_id, corr_id)):
-                    simplifySet.append(corr_id)
-                else:
-                    next_batch.append(corr_id)
-        
-        if (len(next_batch) == 0):
-            return [simplifySet]
-
-        return self.getSimplifySets(next_batch).append(simplifySet)
-
-    #This only comes with one qudit as an option
-    def simplify(self):
-        #Group correlations 
-        #where the qubit is the only element that's different
-        correlationIds = self.correlations.keys()
-        corrSets = self.getSimplifySets(correlationIds)
-
-        if (len(corrSets) > 0):
-            for corrSet in corrSets:
-                if (len(corrSet) > 0):
-                    #preparing a new edge where we'll simplify the result
-                    eid_copy = self.copyCorrelation(corrSet[0])
-                    new_e = self.correlations[eid_copy]
-                    new_e.weight = 0
-
-                    for corrId in corrSet:
-                        new_e.weight = new_e.weight + self.correlations[corrId].weight
-
-                    #clean-up old correlations
-                    for eid in corrSet:
-                        self.deleteCorrelation(eid)
-
-###############################################################
-# DECOMPOSE
-###############################################################
-
-    def decomposeCorrelations(self, base_e, cand_e, qudits):
-        new_e = StateCorrelation(1)
-        self.correlations[new_e.uid] = new_e
-
-        for q in qudits:
-            base_n = self.getQuditStateInCorrelation(q,base_e)
-            cand_n = self.getQuditStateInCorrelation(q,cand_e)
-
-            self.moveCorrelation(base_n,base_e,new_e.uid)
-            self.deleteState(cand_n)
-            
-
-    def canDecomposeCorrelations(self, base_e, cand_e, qudits):
-        for q in qudits:
-            base_n = self.getQuditStateInCorrelation(q,base_e)
-            cand_n = self.getQuditStateInCorrelation(q,cand_e)
-
-            if (not self.states[base_n].valueEq(self.states[cand_n].value)):
-                return False
-
-        return True
-
-    def decomposeRec(self, eids, qudits):
-        if (len(eids)) <= 1:
-            return eids
-
-        for i, base_e in enumerate(eids):
-            for j, cand_e in enumerate(eids):
-                if (i != j and self.canDecomposeCorrelations(base_e, cand_e, qudits)):
-                    self.decomposeCorrelations(base_e, cand_e, qudits)
-                    
-                    #Update the list of correlation ids
-                    eids.remove(base_e)
-                    eids.remove(cand_e)
-
-                    return self.decomposeRec(eids, qudits)
-        
-        return eids
-
-    #returns list of new correlations
-    def decomposeQudits(self, qudits):
-        # Check if we can decompose
-        if (self.areComposed(qudits)):
-            eids_base = self.composedCorrelations(qudits)
-            return self.decomposeRec(eids_base, qudits)
-        else:
-            print("Error: Qudits are not composed.")
-        
-        return []
-        
-###############################################################
-# COMPOSE
-###############################################################
-    
-    def composeCorrelations(self, src_g, target_g, qudits):
-        for src_e in src_g:
-            for target_e in target_g:
-                for state_id in self.correlations[src_e].state_uids:
-                    self.moveCorrelation(state_id,src_e,target_e)
-
-            self.correlations[target_e].weight = self.correlations[target_e].weight * self.correlations[src_e].weight  
-            self.deleteCorrelation(src_e)
-
-    def canComposeCorrelations(self, base_g, cand_g, qudits):
-        return not bool(set(base_g) & set(cand_g))
-
-    def composeRec(self, correlation_groups, qudits): 
-        base_group = []
-        for i,el in enumerate(correlation_groups):
-            if (i == 0):
-                base_group = el
-            else:
-                if (self.canComposeCorrelations(base_group[i], base_group[i-1], qudits)):
-                    correlation_id = self.compose(base_group[i], base_group[i-1], qudits)
-                    correlation_groups.pop(i)
-                    correlation_groups.pop(i-1)
-                    correlation_groups.append([correlation_id])
-
-                    return self.composeRec(correlation_groups, qudits)
-        
-        return correlation_groups
-    
-    def composeQudits(self, qudits):
-        correlation_groups = []
-        for q in qudits:
-            correlation_groups.append(self.getQuditCorrelations(q))
-        
-        return self.composeRec(correlation_groups,qudits)
 
 ###############################################################
 # REWRITE
 ###############################################################
 
-    #
-    def isMatch(self, match_rule, correlation_uid, qudit_map):
-        if (len(match_rule) != len(qudit_map)):
-            #TODO be more verbose?
-            print("The length of the qudit map does not match the length of the rules")
-            return False
-
-        for i, sym in enumerate(match_rule):
-            q = qudit_map[i]
-            state_uid = self.getQuditStateInCorrelation(q, correlation_uid)
-
-            #qudit has no state in this crrelation
-            if (state_uid is None):
-                return False
-            
-            #qudit is in a different state
-            if (not self.states[state_uid].valueEq(sym)):
-                return False
-
-        return True
-    
-    #replace_rules can have multiple rules in it (array of arrays)
-    def replaceMatch(self, replace_rules, correlation_uid, qudit_map):
-        for replace_rule in replace_rules:
-            #copy correlatin
-            new_uid = self.copyCorrelation(correlation_uid)
-            new_c = self.correlations[new_uid]
-            new_c.weight = new_c.weight * replace_rule['weight']
-            self.correlations[new_c.uid] = new_c
-
-            #populate with new states
-            for i,sym in enumerate(replace_rule['kets']):
-                q = qudit_map[i]
-                state_uid = self.getQuditStateInCorrelation(q, new_c.uid)
-                self.states[state_uid].value = sym
- 
-        self.deleteCorrelation(correlation_uid)
-
     #qudit_map=["q0","q1","q2"]
     def rewrite(self,rules,qudit_map):
-        if (self.areComposed(qudit_map)):
-            #set all replacement tracking t False
-            for n in self.states:
-                self.states[n].replaced = False
+        for rule in rules:
+            for i in enumerate(qudit_map):
+                # Get Qudit Sets
+        
 
-            repl_map = {}
-            for rule in rules['rules']:
-                #find matches in correlations
-                for corr_uid in self.correlations:
-                    corr = self.correlations[corr_uid]
-                    if (self.isMatch(rule['match'], corr_uid, qudit_map)):
-                        repl_map[corr_uid] = rule['replace']
-                
-            #replace matches in correlations
-            for corr_uid in repl_map:
-                repl = repl_map[corr_uid]
-                self.replaceMatch(repl, corr_uid, qudit_map)
-                
-            #find matches in system
-            for rule in rules['rules']:
-                if (self.isMatch(rule['match'],None,qudit_map)):
-                    self.replaceMatch(None,rule['replace'],qudit_map)
-        else:
-            print("Can't rewrite. Qudits are not composed")
 
 ###############################################################
 # MEASURE
 ###############################################################
 
     def measure(self, qudits):
-        # iterate over each hyper correlation the qudit is in
-        self.split(qudits)
+        #TODO
+        pass
 
-        for qudit in qudits:
-            states = self.getQuditStates(qudit)
-            for state_uid in states:
-                self.states[state_uid].measured = True
-
-    # TODO calculate how much we are omitting (like Quirk does)
-    # Calculate loss
+    #TODO Calculate loss as well
     def postSelect(self, qudits, s):
-        self.measure(qudits)
-        for qudit in qudits:
-            stateIds = self.getQuditStates(qudit)
-            for stateId in stateIds:
-                state = self.states[stateId]
-                if (not state.valueEq(s)):
-                    self.deleteCorrelation(state.correlation_uid)
+        # TODO
+        pass
+'''
