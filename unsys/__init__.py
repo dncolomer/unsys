@@ -14,16 +14,17 @@ def getUID(prefix="id"):
     qudit_nb = qudit_nb + 1
     return prefix + str(qudit_nb - 1)
 
-#state_map is a map with the qubit labels as keys and their spq state expression as value
-class State:
-    def __init__(self, state_map):
-        self.state_map = state_map
+#qudit_map is a map with the qubit labels as keys and their basis state expression as value
+class BasisState:
+    def __init__(self, amplitude, qudit_map):
+        self.qudit_map = qudit_map
+        self.amplitude = amplitude
         self.uid = getUID("state#")
 
 #pure hanges the interpretation of qubits with multiple states
 class Qudit:
     def __init__(self, label, pure= True):
-        self.uid = getUID("qudit#")
+        self.uid = label
         self.label = label
         self.pure = pure
 
@@ -44,24 +45,21 @@ class QuditSystem:
                 self.qudits[q.uid] = q
 
                 if (symbolic):
-                    sv_size = d
-                    i = 0
-                    while i < sv_size:
-                        sym = sp.symbols(qudit_label+'_'+str(i))
-                        s = sym * spq.Ket(i)
+                    j = 0
+                    while j < d:
+                        amplitude = sp.symbols(qudit_label+'_'+str(j))
                         
-                        state = State({q.uid: s})
+                        state = BasisState(amplitude, {q.uid: spq.Ket(j)})
                         self.states[state.uid] = state
                         
-                        i += 1
+                        j += 1
                 else:
-                    s = spq.Ket('0')
-                    state = State({q.uid: s})
+                    state = BasisState(1, {q.uid: spq.Ket('0')})
                     self.states[state.uid] = state
         else:
             for qudit_label in initial_states:
                 q = Qudit(qudit_label)
-                state = State({q.uid: initial_states[qudit_label]})
+                state = BasisState({q.uid: initial_states[qudit_label]})
                 self.qudits[q.uid] = q
                 self.states[state.uid] = state
            
