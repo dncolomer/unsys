@@ -62,3 +62,9 @@ class QuditSystem:
             else:
                 q = BasisState(qudit)
                 self.qudits[qudit].append(q)
+        
+    def solveInterference():
+        pass
+
+    def solveEntanglement():
+        pass
