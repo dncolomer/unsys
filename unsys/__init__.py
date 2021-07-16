@@ -25,7 +25,6 @@ class BasisState:
 class StateCorrelation:
     def __init__(self, weight):
         self.uid = getUID("c#")
-        self.weight = weight
         self.state_map = {}
     
     #s is a Basis State
