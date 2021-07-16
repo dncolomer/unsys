@@ -4,52 +4,23 @@ import sympy as sp
 import sympy.physics.quantum as spq
 
 def printQuditSystem(quditSystem):
-    for s in quditSystem.states:
-        print("------------ " + s + " ( ampl: " + str(quditSystem.states[s].amplitude) +  " ) " + "------------")
-        for sm in quditSystem.states[s].qudit_map:
-            print(sm + ": " + str(quditSystem.states[s].qudit_map[sm]))
+    for q in quditSystem.qudits:
+        print("---- Qudit " + q + " ----")
+        for s in quditSystem.qudits[q]:
+            print("Amplitude: " + str(s.amplitude))
+            print("Ket: " + str(s.ket))
+            print("***")
 
-'''
-def printStateSystem(state_system, subs=[]):
-    print("      ".join(str(ql) for ql in state_system.quditLabels))
-    print("------".join("--" for ql in state_system.quditLabels))  
-    phelper = []
+        print("-------------------------")
     
-    for e in state_system.correlations:
-        phelper = []
-        for ql in state_system.quditLabels:
-            nid = state_system.getQuditStateInCorrelation(ql,e)
+    for cuid in quditSystem.correlations:
+        print("---- Correlation " + cuid + " ----")
+        for c in quditSystem.correlations[cuid]:
+            for q in c.state_map:
+                for s in c.state_map[q]:
+                    print("Amplitude: " + str(s.amplitude))
+                    print("Ket: " + str(s.ket))
+                    print("Qudit: " + str(s.qudit))
+                    print("***")
 
-            if (nid is not None):
-                replaced = ' '
-                if (state_system.states[nid].replaced):
-                    replaced = '*'
-
-                state = state_system.states[nid].value
-                for sub in subs:
-                    if (sp.symbols(sub) in state.free_symbols):
-                        state = state.subs(sp.symbols(sub),subs[sub])
-
-                if (state_system.states[nid].measured):
-                    phelper.append(str(state) + ' M')
-                else:
-                    phelper.append(state)
-            else:
-                phelper.append("N/A")
-        
-        if (len(phelper) != 0):
-            amp = state_system.correlations[e].weight
-            for sub in subs:
-                if (sp.symbols(sub) in amp.free_symbols):
-                    amp = amp.subs(sp.symbols(sub),subs[sub])
-
-            phelper.append("weight: "+str(amp))
-
-        print("     ".join(str(x) for x in phelper))
-    
-    print("      ".join("  " for ql in state_system.quditLabels))
-    #print(state_system.toStateVector())
-    print("------".join("--" for ql in state_system.quditLabels))
-    print("      ".join("  " for ql in state_system.quditLabels))
-    print("      ".join("  " for ql in state_system.quditLabels))
-'''
+        print("-------------------------")

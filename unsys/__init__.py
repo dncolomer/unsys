@@ -6,221 +6,59 @@ import sympy.physics.quantum as spq
 import string
 
 # global variables
-qudit_nb = 0
+guid = 0
 
-def getUID(prefix="id"):
-    global qudit_nb
+def getUID(prefix="id#"):
+    global guid
 
-    qudit_nb = qudit_nb + 1
-    return prefix + str(qudit_nb - 1)
+    guid = guid + 1
+    return prefix + str(guid - 1)
 
-#qudit_map is a map with the qubit labels as keys and their basis state expression as value
+# qudit is a unique label identifying the qudit system the state belongs to
 class BasisState:
-    def __init__(self, amplitude, qudit_map):
-        self.qudit_map = qudit_map
+    def __init__(self, qudit, ket=spq.Ket('0'), amplitude=1):
+        self.qudit = qudit
+        self.ket = ket
         self.amplitude = amplitude
-        self.uid = getUID("state#")
 
 #pure hanges the interpretation of qubits with multiple states
-class Qudit:
-    def __init__(self, label, pure= True):
-        self.uid = label
-        self.label = label
-        self.pure = pure
+class StateCorrelation:
+    def __init__(self, weight):
+        self.uid = getUID("c#")
+        self.weight = weight
+        self.state_map = {}
+    
+    #s is a Basis State
+    def addState(self, s):
+        if (s.qudit not in self.state_map.keys()):
+            self.state_map[s.qudit] = [] 
+  
+        self.state_map[s.qudit].append(s)
 
 class QuditSystem:
-    def __init__(self, nb_qudits, d, initial_states= None, symbolic= False):
-        global qudit_nb
+    def __init__(self, nb_qudits, dim, symbolic= False):
+        global guid
 
-        self.dimension = d
+        self.dim = dim
         self.qudits = {}
-        self.states = {}
+        self.correlations = {}
         self.nb_qudits = nb_qudits
 
-        if (initial_states is None):
-            qudit_nb = 0
-            for i in range(0, nb_qudits):
-                qudit_label = "q" + str(i)
-                q = Qudit(qudit_label)                        
-                self.qudits[q.uid] = q
+        #init qudits
+        for i in range(0, nb_qudits):
+            qudit_label = "q" + str(i)
+            self.qudits[qudit_label] = []
 
-                if (symbolic):
-                    j = 0
-                    while j < d:
-                        amplitude = sp.symbols(qudit_label+'_'+str(j))
-                        
-                        state = BasisState(amplitude, {q.uid: spq.Ket(j)})
-                        self.states[state.uid] = state
-                        
-                        j += 1
-                else:
-                    state = BasisState(1, {q.uid: spq.Ket('0')})
-                    self.states[state.uid] = state
-        else:
-            for qudit_label in initial_states:
-                q = Qudit(qudit_label)
-                state = BasisState({q.uid: initial_states[qudit_label]})
-                self.qudits[q.uid] = q
-                self.states[state.uid] = state
-           
-'''
-###############################################################
-# UTILS
-###############################################################
+        for qudit in self.qudits:
+            if (symbolic):
+                j = 0
+                while j < dim:
+                    amplitude = sp.symbols(qudit_label+'_'+str(j))
+                    state = BasisState(qudit, spq.Ket(j), amplitude)
 
-
-    def isSuperposed(self):
-        kets = self.getKets()
-
-        if (len(kets) > 1):
-            return True
-
-        return False
-    
-    def getAmplitude(self, ket):
-        return self.value.coeff(ket)
-
-    def getKets(self):
-        v = self.value
-        syms = list(v.free_symbols)
-        kets = []
-        for sym in syms:
-            if (hasattr(sym, 'label')):
-                kets.append(sym)
-        
-        return kets
-    
-    def getExpressionKets(self, e):
-        v = e
-        syms = list(v.free_symbols)
-        kets = []
-        for sym in syms:
-            if (hasattr(sym, 'label')):
-                kets.append(sym)
-        
-        return kets
-
-    #Assumption syngle qudit qudits
-    #TODO should we have qudits and not expressions as input?
-    def valueEq(self, s):
-        s1 = self.value
-        s2 = s
-        
-        kets1 = self.getExpressionKets(s1)
-        kets2 = self.getExpressionKets(s2)
-        
-        if (set(kets1) != set(kets2)):
-            return False
-        
-        ref1_arg = sp.arg(s1.coeff(kets1[0]))
-        ref2_arg = sp.arg(s2.coeff(kets1[0]))
-        for ket in kets1:
-            s1_abs = sp.Abs(s1.coeff(ket))
-            s1_arg = sp.arg(s1.coeff(ket))
-
-            s2_abs = sp.Abs(s2.coeff(ket))
-            s2_arg = sp.arg(s2.coeff(ket))
-
-            s1_relphase = s2_relphase = 0
-            if (ket != kets1[0]):
-                s1_relphase =  sp.Abs(ref1_arg - s1_arg)
-                s2_relphase =  sp.Abs(ref2_arg - s2_arg)
-
-            if (s1_relphase != s2_relphase or s1_abs != s2_abs):
-                return False
-        
-        return True
-
-    def getQuditqudits(self, qudit):
-        uids = []
-        for n in self.qudits:
-            if self.qudits[n].qudit == qudit:
-                uids.append(self.qudits[n].uid)
-
-        return uids
-
-    def getQuditquditInCorrelation(self, qudit, correlation_uid):
-        for n in self.qudits:
-            if self.qudits[n].qudit == qudit:
-                if (self.qudits[n].correlation_uid is None and correlation_uid is None) or (
-                    self.qudits[n].correlation_uid == correlation_uid
-                ):
-                    return self.qudits[n].uid
-
-        return None
-
-    def getQuditCorrelations(self, qudit):
-        uids = []
-        for e in self.correlations:
-            qudit_uids = self.correlations[e].qudit_uids
-            for qudit_uid in qudit_uids:
-                if self.qudits[qudit_uid].qudit == qudit:
-                    uids.append(e)
-
-        return uids
-
-    def correlatequdit(self, qudit_uid, correlation_uid):
-        # assume correlation and qudit exist
-        if self.qudits[qudit_uid].correlation_uid == None:
-            self.qudits[qudit_uid].correlation_uid = correlation_uid
-            self.correlations[correlation_uid].qudit_uids.append(qudit_uid)
-
-    def deletequdit(self, qudit_uid):
-        # assuming qudits only belong to one element
-        if qudit_uid in self.qudits.keys():
-            e_uid = self.qudits[qudit_uid].correlation_uid
-
-            self.qudits.pop(qudit_uid)
-
-            if e_uid in self.correlations.keys():
-                i = self.correlations[e_uid].qudit_uids.index(qudit_uid)
-                self.correlations[e_uid].qudit_uids.pop(i)
-
-    def deleteCorrelation(self, correlation_uid):
-        try:
-            for nid in self.correlations[correlation_uid].qudit_uids:
-                self.qudits.pop(nid)
-
-                self.correlations.pop(correlation_uid)
-        except KeyError:
-            pass
-
-    def copyCorrelation(self, correlation_uid):
-        copy_e = quditCorrelation(self.correlations[correlation_uid].weight)
-        self.correlations[copy_e.uid] = copy_e
-
-        for n in self.correlations[correlation_uid].qudit_uids:
-            qudit = self.qudits[n]
-            new_n = qudit(qudit.qudit,self.dimension)
-            new_n.value = qudit.value
-            self.qudits[new_n.uid] = new_n
-
-            self.correlatequdit(new_n.uid, copy_e.uid)
-        
-        return copy_e.uid
-
-###############################################################
-# REWRITE
-###############################################################
-
-    #qudit_map=["q0","q1","q2"]
-    def rewrite(self,rules,qudit_map):
-        for rule in rules:
-            for i in enumerate(qudit_map):
-                # Get Qudit Sets
-        
-
-
-###############################################################
-# MEASURE
-###############################################################
-
-    def measure(self, qudits):
-        #TODO
-        pass
-
-    #TODO Calculate loss as well
-    def postSelect(self, qudits, s):
-        # TODO
-        pass
-'''
+                    self.qudits[qudit].append(state)
+                    
+                    j += 1
+            else:
+                q = BasisState(qudit)
+                self.qudits[qudit].append(q)
