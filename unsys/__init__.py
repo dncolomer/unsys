@@ -46,5 +46,24 @@ class QuditSystem:
     def draw(self):
         hnx.draw(self.hypergraph)
 
-    def interactive(self):
-        HypernetxWidget(self.hypergraph)
+    def drawBloch(self,qudit):
+        pass
+
+    # subsystems is the list of qudits to consider
+    def drawStatevector(self,subsystems):
+        pass
+
+    # subsystems is the list of qudits to consider
+    def drawProbabilities(self,subsystems):
+        pass
+
+    # subsystems = list of qudits
+    def postselect(self,qudit,state):
+        # Step 1: match (full or lcomb) all the nodes from qudit <qudit> with state <state>
+
+        # Step 2: generate a copy of the hypergraph permatch and update 
+        # it by droppping the rest of the qudit nodes
+
+        # Step 3: recombine the hypergraphs
+
+        pass

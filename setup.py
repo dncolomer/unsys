@@ -32,7 +32,10 @@ setup(
     classifiers=[],
     install_requires=[
         "numpy==1.20.1",
-        "sympy==1.7.1"
+        "sympy==1.7.1",
+        "igraph==0.9.8",
+        "celluloid==0.2.0",
+        "networkx==1.2.0"
     ],
     include_package_data=True,
 )
