@@ -35,7 +35,8 @@ setup(
         "sympy==1.7.1",
         "igraph==0.9.8",
         "celluloid==0.2.0",
-        "networkx==1.2.0"
+        "hypernetx==1.2.0",
+        "hnxwidget==0.1.1b1"
     ],
     include_package_data=True,
 )
