@@ -59,19 +59,16 @@ class QuditSystem:
 
     # subsystems = list of qudits
     def postSelect(self,qudit,state):
-        node_set = ()
+        node_list = []
         # Step 1: match (full or lcomb) all the nodes from qudit <qudit> with state <state>
-        print(self.qudits[qudit])
-        for e in self.qudits[qudit]:
-            print(e)
-            if (e.props['state'] == spq.Ket(0)):
-                node_set.add(e)
+        for e in self.qudits:
+            if (e.props['qudit'] == qudit and e.props['state'] == spq.Ket(0)):
+                node_list.append(e.uid)
         
-        self.hypergraph.remove_nodes(node_set)
+        print(node_list)
+        self.hypergraph = self.hypergraph.remove_nodes(node_list)
 
         # Step 2: generate a copy of the hypergraph permatch and update 
         # it by droppping the rest of the qudit nodes
 
         # Step 3: recombine the hypergraphs
-
-        pass
