@@ -57,6 +57,14 @@ class QuditSystem:
     def drawProbabilities(self,subsystems):
         pass
 
+    def getQuditNodes(self,qudit):
+        node_list = []
+        for e in self.qudits:
+            if (e.props['qudit'] == qudit):
+                node_list.append(e.uid)
+        
+        return node_list
+
     # subsystems = list of qudits
     def postSelect(self,qudit,state):
         node_list = []
