@@ -42,9 +42,19 @@ class QuditSystem:
         self.hypergraph = hnx.Hypergraph({
             getUID('system#'): self.qudits
         })
+
+    def stateMatch(state1,state2):
+        #this should return 0 if not match, 1 if full match and 2 if linear combination match (find better name)
+
+        #for now just
+        return state1 == state2
         
     def draw(self):
-        hnx.draw(self.hypergraph)
+        labels = {}
+        for node in self.hypergraph.nodes():
+            labels[node.uid] = 'qudit ' + str(node.props['qudit']) + ' | ' + str(node.props['state'])
+
+        hnx.draw(self.hypergraph,node_labels=labels)
 
     def drawBloch(self,qudit):
         pass
@@ -68,15 +78,19 @@ class QuditSystem:
     # subsystems = list of qudits
     def postSelect(self,qudit,state):
         node_list = []
-        # Step 1: match (full or lcomb) all the nodes from qudit <qudit> with state <state>
+        # Step 1: delete all nodes where states don't overlap (share no computational basis elements)
         for e in self.qudits:
-            if (e.props['qudit'] == qudit and e.props['state'] == spq.Ket(0)):
+            state_symbols = state.free_symbols
+            node_symbols = e.props['state'].free_symbols
+            symbols_intersection = state_symbols.intersection(node_symbols)
+            if (e.props['qudit'] == qudit and len(symbols_intersection) == 0):
                 node_list.append(e.uid)
+            else:
+                #we colapse the noded state to <state>
+                #REVIEW
+                e.props['state'] = state
         
-        print(node_list)
         self.hypergraph = self.hypergraph.remove_nodes(node_list)
 
-        # Step 2: generate a copy of the hypergraph permatch and update 
-        # it by droppping the rest of the qudit nodes
-
-        # Step 3: recombine the hypergraphs
+        # Step 2: clean-up hyperedges
+        
