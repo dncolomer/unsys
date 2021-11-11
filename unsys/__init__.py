@@ -43,11 +43,11 @@ class QuditSystem:
             getUID('system#'): self.qudits
         })
 
-    def stateMatch(state1,state2):
-        #this should return 0 if not match, 1 if full match and 2 if linear combination match (find better name)
+    def stateIntersection(self,state1,state2):
+        s1_symbols = state1.free_symbols
+        s2_symbols = state2.free_symbols
 
-        #for now just
-        return state1 == state2
+        return s1_symbols.intersection(s2_symbols)
         
     def draw(self):
         labels = {}
@@ -80,10 +80,8 @@ class QuditSystem:
         node_list = []
         # Step 1: delete all nodes where states don't overlap (share no computational basis elements)
         for e in self.qudits:
-            state_symbols = state.free_symbols
-            node_symbols = e.props['state'].free_symbols
-            symbols_intersection = state_symbols.intersection(node_symbols)
-            if (e.props['qudit'] == qudit and len(symbols_intersection) == 0):
+            state_intersection = self.stateIntersection(state,e.props['state'])
+            if (e.props['qudit'] == qudit and len(state_intersection) == 0):
                 node_list.append(e.uid)
             else:
                 #we colapse the noded state to <state>
