@@ -39,9 +39,8 @@ class QuditSystem:
                 self.qudits.append(hnx.Entity(getUID(),props={'qudit':qudit, 'state':spq.Ket(0)}))
         
         #Initialize Hypergraph
-        self.hypergraph = hnx.Hypergraph({
-            getUID('system#'): self.qudits
-        })
+        syslabel = getUID('system#')
+        self.hypergraph = hnx.Hypergraph({syslabel: hnx.Entity(syslabel,elements=self.qudits,props={'coeff':1})})
 
     def stateIntersection(self,state1,state2):
         s1_symbols = state1.free_symbols
@@ -50,11 +49,15 @@ class QuditSystem:
         return s1_symbols.intersection(s2_symbols)
         
     def draw(self):
-        labels = {}
+        node_labels = {}
         for node in self.hypergraph.nodes():
-            labels[node.uid] = 'qudit ' + str(node.props['qudit']) + ' | ' + str(node.props['state'])
+            node_labels[node.uid] = 'qudit ' + str(node.props['qudit']) + ' | ' + str(node.props['state'])
 
-        hnx.draw(self.hypergraph,node_labels=labels)
+        edge_labels = {}
+        for edge in self.hypergraph.edges():
+            edge_labels[edge.uid] = str(edge.uid) + ' | coeff: ' + str(edge.props['coeff'])
+
+        hnx.draw(self.hypergraph,node_labels=node_labels,edge_labels=edge_labels)
 
     def drawBloch(self,qudit):
         pass
@@ -77,18 +80,26 @@ class QuditSystem:
 
     # subsystems = list of qudits
     def postSelect(self,qudit,state):
-        node_list = []
-        # Step 1: delete all nodes where states don't overlap (share no computational basis elements)
+        hg = self.hypergraph
+        #delete all nodes where states don't overlap (share no computational basis elements)
         for e in self.qudits:
             state_intersection = self.stateIntersection(state,e.props['state'])
             if (e.props['qudit'] == qudit and len(state_intersection) == 0):
-                node_list.append(e.uid)
+                #fetch all the hyperedges this node belongs to
+                hedges = e.memberships
+
+                #remove node from hypergraph
+                hg = self.hypergraph.remove_node(e.uid)
+
+                #for hedge in hedges: 
+                    #for all the other remaining nodes
+                        #if not belong to another hedge that's not in the list to process
+                            #delete noded
+                        #if edge empty
+                            #delete edge
+                
+
             else:
                 #we colapse the noded state to <state>
                 #REVIEW
-                e.props['state'] = state
-        
-        self.hypergraph = self.hypergraph.remove_nodes(node_list)
-
-        # Step 2: clean-up hyperedges
-        
+                e.props['state'] = state        
