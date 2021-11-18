@@ -99,7 +99,6 @@ class QuditSystem:
 
         return self.cascadeNodeRemoval(next_hedges) 
 
-
     # subsystems = list of qudits
     def postSelect(self,qudit,state):
         hg = self.hypergraph
