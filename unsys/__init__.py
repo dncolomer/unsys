@@ -1,4 +1,5 @@
 from itertools import combinations
+from networkx.classes.function import neighbors
 
 import numpy as np
 import sympy as sp
@@ -89,13 +90,27 @@ class QuditSystem:
 
         for h in hedges:
             hedge = hedges[h]
+
+            #clean-up as many nodes as possible
             for n in hedge.children:
                 node = hedge.children[n]
-                if (len(node.memberships) == 1):
+                if (len(node.memberships) <= 2): #all nodes are members of at least the system hedge
                     self.hypergraph.remove_node(node)
-                #else:
-                    #TODO:we need to detect when we are in a nested hyperedge
-                    #next_hedges.append(node.memberships)
+            
+            #neighbour hedges
+            edge_neighbors = self.hypergraph.edge_neighbors(hedge)
+            for e in edge_neighbors:
+                edge = edge_neighbors[e]
+                if (len(edge.intersection(hedge)) == len(edge.children)):
+                    #is nested
+                    #TODO update coeff
+                    self.hypergraph = self.hypergraph
+                else:
+                    #not nested
+                    #remove intersecting nodes
+                    self.hypergraph.remove_nodes(edge.intersection(hedge))
+                    #queue edge
+                    #TODO
 
         return self.cascadeNodeRemoval(next_hedges) 
 
