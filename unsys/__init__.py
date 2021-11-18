@@ -82,7 +82,21 @@ class QuditSystem:
         return node_list
 
     def cascadeNodeRemoval(self,hedges):
-        return self.hypergraph
+        if (len(hedges) == 0):
+            return self.hypergraph
+
+        next_hedges = ()
+
+        for hedge in hedges:
+            for node in hedge.children:
+                if (len(node.memberships) == 1):
+                    self.hypergraph.remove_node(node)
+                #else:
+                    #TODO:we need to detect when we are in a nested hyperedge
+                    #next_hedges.append(node.memberships)
+
+        return self.cascadeNodeRemoval(next_hedges) 
+
 
     # subsystems = list of qudits
     def postSelect(self,qudit,state):
