@@ -87,8 +87,10 @@ class QuditSystem:
 
         next_hedges = ()
 
-        for hedge in hedges:
-            for node in hedge.children:
+        for h in hedges:
+            hedge = hedges[h]
+            for n in hedge.children:
+                node = hedge.children[n]
                 if (len(node.memberships) == 1):
                     self.hypergraph.remove_node(node)
                 #else:
