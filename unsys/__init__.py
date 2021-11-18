@@ -86,7 +86,7 @@ class QuditSystem:
         if (len(hedges) == 0):
             return self.hypergraph
 
-        next_hedges = ()
+        next_hedges = []
 
         for h in hedges:
             hedge = hedges[h]
@@ -102,15 +102,14 @@ class QuditSystem:
             for e in edge_neighbors:
                 edge = edge_neighbors[e]
                 if (len(edge.intersection(hedge)) == len(edge.children)):
-                    #is nested
-                    #TODO update coeff
-                    self.hypergraph = self.hypergraph
+                    #is nested: update coeff
+                    edge.props['coeff'] = 0
                 else:
                     #not nested
                     #remove intersecting nodes
                     self.hypergraph.remove_nodes(edge.intersection(hedge))
                     #queue edge
-                    #TODO
+                    next_hedges.append(edge)
 
         return self.cascadeNodeRemoval(next_hedges) 
 
