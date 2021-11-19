@@ -66,9 +66,20 @@ class QuditSystem:
     def drawBloch(self,qudit):
         pass
 
+    def getStatevector(self,qudit):
+        pass
+    
     # subsystems is the list of qudits to consider
     def drawStatevector(self,subsystems):
         pass
+
+    def getQuditProbabilities(self,qudit):
+        mProb = []
+        j = 0
+        while j < self.dim:
+            mProb[j] = 0
+        
+        return mProb
 
     # subsystems is the list of qudits to consider
     def drawProbabilities(self,subsystems):
@@ -133,4 +144,6 @@ class QuditSystem:
                 else:
                     #we colapse the noded state to <state>
                     #REVIEW
-                    e.props['state'] = state        
+                    e.props['state'] = state
+
+
