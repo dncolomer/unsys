@@ -83,8 +83,10 @@ class QuditSystem:
                 joint_combos = []
                 for combo in combos:
                     for node_combo in combo:
-                        joint_combos.append(node_combo)
-                        #joint_combos.append(node_combo[0] + (node_combo[1],))
+                        if (type(node_combo[0]) is tuple):
+                            joint_combos.append(node_combo[0] + (node_combo[1],))
+                        else:
+                            joint_combos.append(node_combo)
                 
                 all_combos = joint_combos
         
