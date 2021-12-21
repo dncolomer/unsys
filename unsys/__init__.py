@@ -1,6 +1,6 @@
-from itertools import combinations
 from networkx.classes.function import neighbors
 
+import itertools as it
 import numpy as np
 import sympy as sp
 import sympy.physics.quantum as spq
@@ -17,11 +17,12 @@ def getUID(prefix="id#"):
     return prefix + str(guid - 1)
 
 class QuditSystem:
-    def __init__(self, nb_qudits, dim, symbolic= False, hypergraph= None):
+    def __init__(self, nb_qudits, dim= 2, symbolic= False, hypergraph= None):
         global guid
 
         self.dim = dim
         self.nb_qudits = nb_qudits
+        self.qudit_labels = []
 
         if (hypergraph is not None):
             self.hypergraph = hypergraph
@@ -30,6 +31,7 @@ class QuditSystem:
             qudits = []
 
             for qudit in range(nb_qudits):
+                self.qudit_labels.append(qudit)
                 if (symbolic):
                     j = 0
                     state = 0
@@ -66,7 +68,29 @@ class QuditSystem:
     def drawBloch(self,qudit):
         pass
 
-    def getStatevector(self,qudit):
+    def getStatevectorIndices(self):
+        flat = []
+        all_combos = []
+
+        for index, qudit_label in enumerate(self.qudit_labels):
+            if (index == 0):
+                all_combos = self.getQuditNodes(qudit_label)
+            else:
+                new_nodes = self.getQuditNodes(qudit_label)
+
+                combos = [list(zip(each_permutation, new_nodes)) for each_permutation in it.permutations(all_combos, len(new_nodes))]
+                print(combos)
+                joint_combos = []
+                for combo in combos:
+                    for node_combo in combo:
+                        joint_combos.append(node_combo)
+                        #joint_combos.append(node_combo[0] + (node_combo[1],))
+                
+                all_combos = joint_combos
+        
+        return set(all_combos)
+
+    def getStatevector(self,qudits):
         pass
     
     # subsystems is the list of qudits to consider
@@ -101,12 +125,6 @@ class QuditSystem:
 
         for h in hedges:
             hedge = hedges[h]
-
-            #clean-up as many nodes as possible
-            for n in hedge.children:
-                node = hedge.children[n]
-                if (len(node.memberships) <= 2): #all nodes are members of at least the system hedge
-                    self.hypergraph.remove_node(node)
             
             #neighbour hedges
             edge_neighbors = self.hypergraph.edge_neighbors(hedge)
@@ -121,6 +139,12 @@ class QuditSystem:
                     self.hypergraph.remove_nodes(edge.intersection(hedge))
                     #queue edge
                     next_hedges.append(edge)
+            
+            #clean-up as many nodes as possible
+            for n in hedge.children:
+                node = hedge.children[n]
+                if (len(node.memberships) <= 2): #all nodes are members of at least the system hedge
+                    self.hypergraph.remove_node(node)
 
         return self.cascadeNodeRemoval(next_hedges) 
 
@@ -129,14 +153,15 @@ class QuditSystem:
         hg = self.hypergraph
         #delete all nodes where states don't overlap (share no computational basis elements)
         for e in self.hypergraph.nodes():
-            state_intersection = self.stateIntersection(state,e.props['state'])
             if (e.props['qudit'] == qudit):
+                state_intersection = self.stateIntersection(state,e.props['state'])
+                
                 if (len(state_intersection) == 0):
                     #fetch all the hyperedges this node belongs to
                     hedges = e.memberships
 
                     #remove node from hypergraph
-                    self.hypergraph = self.hypergraph.remove_node(e.uid)
+                    self.hypergraph.remove_node(e.uid)
 
                     #update the rest of the hypergraph
                     self.cascadeNodeRemoval(hedges)
