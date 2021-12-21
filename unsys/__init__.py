@@ -68,7 +68,7 @@ class QuditSystem:
     def drawBloch(self,qudit):
         pass
 
-    def getStatevectorIndices(self):
+    def getQuditNodeCombinations(self):
         flat = []
         all_combos = []
 
